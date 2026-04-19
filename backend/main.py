@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from routes import ai
+from backend.routes import ai
 
 app = FastAPI()
 

@@ -934,7 +934,11 @@ export default function Builder() {
                 alignSelf: "flex-start",
               }}
             >
-              <StandardCV data={resume} photo={photo} previewRef={previewRef} />
+              <StandardCV
+                data={resume}
+                photo={photo}
+                previewRef={previewRef as any}
+              />
             </div>
           </div>
         </div>

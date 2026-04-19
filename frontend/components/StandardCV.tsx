@@ -1,79 +1,78 @@
 import React from "react";
-import { ResumeData } from "@/app/builder/page";
 
-export default function StandardCV({ data }: { data: ResumeData }) {
+export default function StandardCV({ data }: { data: any }) {
   return (
     <div
       id="resume-preview"
-      className="bg-white p-12 shadow-2xl mx-auto w-full max-w-200 min-h-262.5 text-slate-900 font-serif leading-snug"
+      className="ats-resume bg-white p-12 shadow-2xl mx-auto w-full max-w-[800px] min-h-[1050px] text-black leading-tight border border-gray-200"
     >
-      {/* Header */}
-      <div className="text-center border-b-2 border-slate-900 pb-6 mb-8">
-        <h1 className="text-4xl font-bold uppercase tracking-tighter mb-2">
-          {data.full_name || "Your Name"}
+      {/* HEADER: ATS strictly likes center or left-aligned text */}
+      <div className="text-center mb-6">
+        <h1 className="text-2xl font-bold uppercase mb-1">
+          {data.full_name || "YOUR NAME"}
         </h1>
-        <div className="text-sm text-slate-600 flex justify-center gap-4">
-          <span>{data.email}</span>
-          <span>{data.phone}</span>
-          <span>{data.location}</span>
-        </div>
+        <p className="text-sm">
+          {data.email} | {data.phone} | {data.location}
+        </p>
       </div>
 
-      {/* Summary */}
+      {/* SUMMARY */}
       {data.summary && (
-        <section className="mb-8">
-          <h2 className="text-xs font-bold uppercase tracking-[0.2em] border-b border-slate-200 mb-3 text-slate-500">
+        <div className="mb-4">
+          <h2 className="text-[11pt] font-bold uppercase border-b border-black mb-1">
             Professional Summary
           </h2>
-          <p className="text-[13px] italic leading-relaxed">{data.summary}</p>
-        </section>
+          <p className="text-[10.5pt] text-justify">{data.summary}</p>
+        </div>
       )}
 
-      {/* Experience */}
-      <section className="mb-8">
-        <h2 className="text-xs font-bold uppercase tracking-[0.2em] border-b border-slate-200 mb-4 text-slate-500">
-          Experience
+      {/* EXPERIENCE */}
+      <div className="mb-4">
+        <h2 className="text-[11pt] font-bold uppercase border-b border-black mb-2">
+          Work Experience
         </h2>
-        {data.experience?.map((exp, idx) => (
-          <div key={idx} className="mb-6">
-            <div className="flex justify-between items-baseline">
-              <h3 className="text-md font-bold text-slate-800">
-                {exp.company}
-              </h3>
-              <span className="text-xs font-medium text-slate-500">
-                {exp.duration}
-              </span>
+        {data.experience?.map((exp: any, i: number) => (
+          <div key={i} className="mb-3">
+            <div className="flex justify-between font-bold text-[10.5pt]">
+              <span>{exp.company}</span>
+              <span>{exp.duration}</span>
             </div>
-            <div className="flex justify-between mb-2">
-              <span className="text-sm italic text-slate-700">{exp.role}</span>
+            <div className="flex justify-between italic text-[10.5pt]">
+              <span>{exp.role}</span>
+              <span>{exp.location}</span>
             </div>
-            <ul className="list-disc list-outside ml-5 space-y-1">
-              {exp.bullets?.map((bullet, bIdx) => (
-                <li key={bIdx} className="text-[12.5px] pl-1">
-                  {bullet}
-                </li>
+            <ul className="list-disc ml-5 mt-1 text-[10pt]">
+              {exp.bullets?.map((b: string, j: number) => (
+                <li key={j}>{b}</li>
               ))}
             </ul>
           </div>
         ))}
-      </section>
+      </div>
 
-      {/* Skills */}
-      <section>
-        <h2 className="text-xs font-bold uppercase tracking-[0.2em] border-b border-slate-200 mb-3 text-slate-500">
-          Technical Skills
+      {/* EDUCATION */}
+      <div className="mb-4">
+        <h2 className="text-[11pt] font-bold uppercase border-b border-black mb-2">
+          Education
         </h2>
-        <div className="flex flex-wrap gap-2">
-          {data.skills?.map((skill, sIdx) => (
-            <span
-              key={sIdx}
-              className="text-[12px] bg-slate-50 px-2 py-0.5 border border-slate-100 rounded"
-            >
-              {skill}
-            </span>
-          ))}
-        </div>
-      </section>
+        {data.education?.map((edu: any, i: number) => (
+          <div key={i} className="flex justify-between text-[10.5pt]">
+            <div>
+              <span className="font-bold">{data.school}</span> —{" "}
+              <span>{edu.degree}</span>
+            </div>
+            <span>{edu.year}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* SKILLS */}
+      <div>
+        <h2 className="text-[11pt] font-bold uppercase border-b border-black mb-1">
+          Skills
+        </h2>
+        <p className="text-[10pt]">{data.skills?.join(", ")}</p>
+      </div>
     </div>
   );
 }

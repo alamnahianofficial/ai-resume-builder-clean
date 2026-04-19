@@ -1,29 +1,13 @@
 import React from "react";
-
-// Define the structure to replace 'any'
-interface ResumeData {
-  full_name: string;
-  email: string;
-  phone: string;
-  location: string;
-  summary: string;
-  experience: {
-    company: string;
-    role: string;
-    location: string;
-    duration: string;
-    bullets: string[];
-  }[];
-  skills: string[];
-}
+import { ResumeData } from "@/app/builder/page";
 
 export default function StandardCV({ data }: { data: ResumeData }) {
   return (
-    // Updated Tailwind classes to canonical versions suggested by your IDE
     <div
       id="resume-preview"
       className="bg-white p-12 shadow-2xl mx-auto w-full max-w-200 min-h-262.5 text-slate-900 font-serif leading-snug"
     >
+      {/* Header */}
       <div className="text-center border-b-2 border-slate-900 pb-6 mb-8">
         <h1 className="text-4xl font-bold uppercase tracking-tighter mb-2">
           {data.full_name || "Your Name"}
@@ -34,7 +18,62 @@ export default function StandardCV({ data }: { data: ResumeData }) {
           <span>{data.location}</span>
         </div>
       </div>
-      {/* ... rest of the component remains the same ... */}
+
+      {/* Summary */}
+      {data.summary && (
+        <section className="mb-8">
+          <h2 className="text-xs font-bold uppercase tracking-[0.2em] border-b border-slate-200 mb-3 text-slate-500">
+            Professional Summary
+          </h2>
+          <p className="text-[13px] italic leading-relaxed">{data.summary}</p>
+        </section>
+      )}
+
+      {/* Experience */}
+      <section className="mb-8">
+        <h2 className="text-xs font-bold uppercase tracking-[0.2em] border-b border-slate-200 mb-4 text-slate-500">
+          Experience
+        </h2>
+        {data.experience?.map((exp, idx) => (
+          <div key={idx} className="mb-6">
+            <div className="flex justify-between items-baseline">
+              <h3 className="text-md font-bold text-slate-800">
+                {exp.company}
+              </h3>
+              <span className="text-xs font-medium text-slate-500">
+                {exp.duration}
+              </span>
+            </div>
+            <div className="flex justify-between mb-2">
+              <span className="text-sm italic text-slate-700">{exp.role}</span>
+            </div>
+            <ul className="list-disc list-outside ml-5 space-y-1">
+              {exp.bullets?.map((bullet, bIdx) => (
+                <li key={bIdx} className="text-[12.5px] pl-1">
+                  {bullet}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </section>
+
+      {/* Skills */}
+      <section>
+        <h2 className="text-xs font-bold uppercase tracking-[0.2em] border-b border-slate-200 mb-3 text-slate-500">
+          Technical Skills
+        </h2>
+        <div className="flex flex-wrap gap-2">
+          {data.skills?.map((skill, sIdx) => (
+            <span
+              key={sIdx}
+              className="text-[12px] bg-slate-50 px-2 py-0.5 border border-slate-100 rounded"
+            >
+              {skill}
+            </span>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }

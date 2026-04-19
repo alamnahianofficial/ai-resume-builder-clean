@@ -14,11 +14,8 @@ export default function LandingPage() {
 
       {/* Nav */}
       <nav className="relative z-10 flex justify-between items-center px-6 py-6 max-w-7xl mx-auto">
-        <div className="text-xl font-bold tracking-tighter flex items-center gap-2">
-          <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white">
-            R
-          </div>
-          <span>ResumeAI</span>
+        <div className="text-xl font-black tracking-tighter flex items-center gap-2 italic text-blue-500">
+          CV DADA
         </div>
         <Link
           href="/builder"
@@ -41,12 +38,12 @@ export default function LandingPage() {
           <h1 className="text-5xl md:text-8xl font-bold tracking-tight mb-8 max-w-5xl leading-[1.05]">
             Land your dream job with <br />
             <span className="bg-gradient-to-r from-blue-400 via-indigo-400 to-cyan-400 bg-clip-text text-transparent">
-              AI-Optimized Resumes.
+              CV DADA.
             </span>
           </h1>
           <p className="text-zinc-400 text-lg md:text-xl max-w-2xl mx-auto mb-12 leading-relaxed">
-            Stop fighting with formatting. Let our AI rewrite your experience
-            for maximum ATS impact and recruiter appeal.
+            Stop fighting with formatting. Build a professional, ATS-friendly CV
+            in minutes — download as PDF or DOCX instantly.
           </p>
 
           <div className="flex flex-col sm:flex-row gap-5 justify-center">
@@ -54,7 +51,7 @@ export default function LandingPage() {
               href="/builder"
               className="px-10 py-5 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-bold text-lg transition-all shadow-xl shadow-blue-600/20 flex items-center justify-center gap-2 group"
             >
-              Get Started for Free
+              Build Your CV — Free
               <span className="group-hover:translate-x-1 transition-transform">
                 →
               </span>
@@ -69,10 +66,13 @@ export default function LandingPage() {
           transition={{ delay: 0.2, duration: 1 }}
           className="mt-24 w-full max-w-6xl aspect-[16/9] bg-gradient-to-b from-white/10 to-transparent p-[1px] rounded-3xl"
         >
-          <div className="w-full h-full bg-[#0B0F1A]/80 backdrop-blur-md rounded-3xl overflow-hidden shadow-2xl flex items-center justify-center">
-            <div className="text-zinc-600 font-mono text-sm">
-              Interactive Preview Loading...
-            </div>
+          <div className="w-full h-full bg-[#0B0F1A]/80 backdrop-blur-md rounded-3xl overflow-hidden shadow-2xl flex flex-col items-center justify-center gap-4">
+            <p className="text-blue-500 font-black italic text-4xl tracking-tighter">
+              CV DADA
+            </p>
+            <p className="text-zinc-600 font-mono text-sm">
+              Your professional CV, ready in minutes.
+            </p>
           </div>
         </motion.div>
       </main>

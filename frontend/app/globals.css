@@ -1,79 +1,76 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-  /* Define Times New Roman here */
   --font-serif: "Times New Roman", Times, serif;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-  /* Add serif to Tailwind theme */
-  --font-serif: var(--font-serif);
+body {
+  background: #030712;
+  color: #e2e8f0;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  overflow-x: hidden;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #030712; /* Deep SaaS black */
-    --foreground: #ededed;
+/* THE A4 PAPER ENGINE */
+.a4-page {
+  width: 210mm;
+  min-height: 297mm;
+  padding: 20mm;
+  background: white !important;
+  color: black !important;
+  font-family: var(--font-serif) !important;
+  box-shadow: 0 0 60px rgba(0,0,0,0.8);
+  position: relative;
+}
+
+/* UI COMPONENTS */
+.dada-input {
+  width: 100%;
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  color: white;
+  padding: 14px;
+  border-radius: 12px;
+  outline: none;
+  font-size: 14px;
+}
+.dada-input:focus { border-color: #3b82f6; box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1); }
+
+.tab-btn {
+  background: #1e293b;
+  border: 1px solid #334155;
+  padding: 10px 18px;
+  border-radius: 14px;
+  font-size: 11px;
+  font-weight: 800;
+  color: #94a3b8;
+  white-space: nowrap;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.tab-btn:hover { background: #2563eb; color: white; transform: translateY(-2px); }
+
+.action-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 24px;
+  border-radius: 100px;
+  font-size: 12px;
+  font-weight: 900;
+  color: white;
+  transition: all 0.3s;
+}
+
+@media print {
+  body * { visibility: hidden !important; }
+  #resume-preview, #resume-preview * { visibility: visible !important; }
+  #resume-preview {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 210mm;
+    box-shadow: none !important;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: ui-sans-serif, system-ui, sans-serif;
-  font-feature-settings:
-    "rlig" 1,
-    "calt" 1;
-}
-
-/* ATS Resume Class: Forces Times New Roman regardless of system dark mode */
-.ats-resume {
-  font-family: var(--font-serif) !important;
-  background-color: white !important;
-  color: black !important;
-}
-
-/* Your existing Custom UI Classes */
-.input {
-  width: 100%;
-  padding: 12px;
-  border-radius: 12px;
-  background: rgba(0, 0, 0, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: white;
-  outline: none;
-  transition: all 0.2s;
-}
-
-.input:focus {
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
-}
-
-.btn {
-  width: 100%;
-  padding: 12px;
-  border-radius: 12px;
-  background: linear-gradient(to right, #3b82f6, #6366f1);
-  color: white;
-  font-weight: 600;
-  transition: transform 0.1s;
-}
-
-.btn:active {
-  transform: scale(0.98);
-}
-
-.btn-secondary {
-  width: 100%;
-  padding: 12px;
-  border-radius: 12px;
-  background: #3f3f46;
-  color: white;
-}
+.scrollbar-hide::-webkit-scrollbar { display: none; }

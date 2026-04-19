@@ -1,4 +1,5 @@
 import React from "react";
+import { RefObject } from "react";
 
 const FONT = "'Times New Roman', Times, serif";
 
@@ -32,7 +33,7 @@ interface ResumeData {
 interface Props {
   data: ResumeData;
   photo: string | null;
-  previewRef: React.RefObject<HTMLDivElement>;
+  previewRef: React.RefObject<HTMLDivElement | null>;
 }
 
 export default function StandardCV({ data, photo, previewRef }: Props) {
@@ -99,7 +100,9 @@ export default function StandardCV({ data, photo, previewRef }: Props) {
               fontFamily: FONT,
             }}
           >
-            {[data.email, data.phone, data.location].filter(Boolean).join("  |  ")}
+            {[data.email, data.phone, data.location]
+              .filter(Boolean)
+              .join("  |  ")}
           </div>
 
           {/* Social links row */}
@@ -122,7 +125,9 @@ export default function StandardCV({ data, photo, previewRef }: Props) {
                     fontFamily: FONT,
                   }}
                 >
-                  <span style={{ color: "#444", fontWeight: "bold" }}>{label}:</span>{" "}
+                  <span style={{ color: "#444", fontWeight: "bold" }}>
+                    {label}:
+                  </span>{" "}
                   {url}
                 </span>
               ))}
@@ -194,7 +199,9 @@ export default function StandardCV({ data, photo, previewRef }: Props) {
                   }}
                 >
                   <span>{item.org}</span>
-                  <span style={{ fontWeight: "normal", color: "#333" }}>{item.date}</span>
+                  <span style={{ fontWeight: "normal", color: "#333" }}>
+                    {item.date}
+                  </span>
                 </div>
               )}
 
@@ -213,7 +220,13 @@ export default function StandardCV({ data, photo, previewRef }: Props) {
               )}
 
               {item.desc && (
-                <ul style={{ margin: "3px 0 0 20px", padding: 0, listStyleType: "disc" }}>
+                <ul
+                  style={{
+                    margin: "3px 0 0 20px",
+                    padding: 0,
+                    listStyleType: "disc",
+                  }}
+                >
                   {item.desc
                     .split("\n")
                     .filter((b) => b.trim())
@@ -241,7 +254,13 @@ export default function StandardCV({ data, photo, previewRef }: Props) {
   );
 }
 
-function CVSection({ title, children }: { title: string; children: React.ReactNode }) {
+function CVSection({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
   return (
     <div style={{ marginBottom: "14px" }}>
       <div

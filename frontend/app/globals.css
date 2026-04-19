@@ -27,3 +27,25 @@ body {
     "rlig" 1,
     "calt" 1;
 }
+.input {
+  width: 100%;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: white;
+}
+
+.btn {
+  width: 100%;
+  padding: 12px;
+  border-radius: 12px;
+  background: linear-gradient(to right, #3b82f6, #6366f1);
+}
+
+.btn-secondary {
+  width: 100%;
+  padding: 12px;
+  border-radius: 12px;
+  background: #3f3f46;
+}

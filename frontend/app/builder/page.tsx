@@ -1,161 +1,358 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Download, FileText, ImageIcon, Loader2, Trash2 } from "lucide-react";
-import StandardCV from "@/components/StandardCV";
+import {
+  Download,
+  FileText,
+  ImageIcon,
+  Loader2,
+  Trash2,
+  Sparkles,
+} from "lucide-react";
+import StandardCV, {
+  ResumeData,
+  EduEntry,
+  ExpEntry,
+  ProjectEntry,
+  SkillEntry,
+  CertEntry,
+  ExtraEntry,
+} from "@/components/StandardCV";
 
-interface Item {
-  id: number;
-  org: string;
-  date: string;
-  desc: string;
-  link?: string;
+// ─── BLANKS ──────────────────────────────────────────────────────────────────
+const uid = () => Date.now() + Math.random();
+const blankEdu = (): EduEntry => ({
+  id: uid(),
+  institution: "",
+  degree: "",
+  cgpa: "",
+  duration: "",
+});
+const blankExp = (): ExpEntry => ({
+  id: uid(),
+  role: "",
+  org: "",
+  duration: "",
+  desc: "",
+});
+const blankProj = (): ProjectEntry => ({
+  id: uid(),
+  name: "",
+  link: "",
+  duration: "",
+  desc: "",
+});
+const blankSkill = (): SkillEntry => ({ id: uid(), category: "", skills: "" });
+const blankCert = (): CertEntry => ({
+  id: uid(),
+  name: "",
+  issuer: "",
+  date: "",
+});
+const blankExtra = (): ExtraEntry => ({ id: uid(), label: "", value: "" });
+
+const initResume = (): ResumeData => ({
+  full_name: "",
+  email: "",
+  phone: "",
+  location: "",
+  linkedin: "",
+  github: "",
+  portfolio: "",
+  summary: "",
+  education: [blankEdu()],
+  experience: [blankExp()],
+  projects: [blankProj()],
+  skills: [blankSkill()],
+  certifications: [blankCert()],
+  extras: [blankExtra()],
+});
+
+// ─── PDF HTML ────────────────────────────────────────────────────────────────
+const F = "'Times New Roman', Times, serif";
+
+function buildPDFHtml(data: ResumeData, photo: string | null): string {
+  const contacts = [data.email, data.phone, data.location]
+    .filter(Boolean)
+    .join("  |  ");
+  const socials = [
+    data.linkedin &&
+      `<span><b>LinkedIn:</b> <span style="color:#1a56db">${data.linkedin}</span></span>`,
+    data.github &&
+      `<span><b>GitHub:</b> <span style="color:#1a56db">${data.github}</span></span>`,
+    data.portfolio &&
+      `<span><b>Portfolio:</b> <span style="color:#1a56db">${data.portfolio}</span></span>`,
+  ]
+    .filter(Boolean)
+    .join(`<span style="margin:0 8px;color:#666">|</span>`);
+
+  const ST = (t: string) => `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">
+      <h2 style="font-family:${F};font-size:11pt;font-weight:bold;text-transform:uppercase;
+                 letter-spacing:.07em;margin:0;padding:0;white-space:nowrap;flex-shrink:0">${t}</h2>
+      <div style="flex:1;height:1.5px;background:#000;min-width:0"></div>
+    </div>`;
+
+  const BD = (t: string) =>
+    t
+      ? `<span style="font-family:${F};font-size:10pt;font-weight:bold;white-space:nowrap">${t}</span>`
+      : "";
+
+  const BL = (desc: string) => {
+    const lines = desc
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
+    return lines.length
+      ? `<ul style="margin:3px 0 0 18px;padding:0;list-style-type:disc">${lines
+          .map(
+            (l) =>
+              `<li style="font-family:${F};font-size:10pt;line-height:1.55;margin-bottom:2px">${l}</li>`,
+          )
+          .join("")}</ul>`
+      : "";
+  };
+
+  const hasPhoto = !!photo;
+
+  // ── Section HTMLs in professional order ──
+  const summaryHTML = data.summary
+    ? `
+    <div style="margin-bottom:14px">
+      ${ST("Professional Profile")}
+      <p style="font-family:${F};font-size:10.5pt;line-height:1.65;text-align:justify;margin:0">${data.summary}</p>
+    </div>`
+    : "";
+
+  const eduRows = data.education.filter((e) => e.institution || e.degree);
+  const eduHTML = eduRows.length
+    ? `
+    <div style="margin-bottom:14px">
+      ${ST("Education")}
+      ${eduRows
+        .map(
+          (e, i) => `
+        <div style="margin-top:${i === 0 ? "0" : "10px"}">
+          <div style="display:flex;justify-content:space-between;align-items:baseline">
+            <span style="font-family:${F};font-size:10.5pt;font-weight:bold">${e.institution}</span>
+            ${BD(e.duration)}
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:baseline">
+            <span style="font-family:${F};font-size:10pt;font-style:italic;color:#222">${e.degree}</span>
+            ${e.cgpa ? `<span style="font-family:${F};font-size:10pt">CGPA: <b>${e.cgpa}</b></span>` : ""}
+          </div>
+        </div>`,
+        )
+        .join("")}
+    </div>`
+    : "";
+
+  const expRows = data.experience.filter((e) => e.role || e.org);
+  const expHTML = expRows.length
+    ? `
+    <div style="margin-bottom:14px">
+      ${ST("Work Experience")}
+      ${expRows
+        .map(
+          (e, i) => `
+        <div style="margin-top:${i === 0 ? "0" : "10px"}">
+          <div style="display:flex;justify-content:space-between;align-items:baseline">
+            <span style="font-family:${F};font-size:10.5pt;font-weight:bold">${e.role}</span>
+            ${BD(e.duration)}
+          </div>
+          ${e.org ? `<div style="font-family:${F};font-size:10pt;color:#333;margin-bottom:2px">${e.org}</div>` : ""}
+          ${BL(e.desc)}
+        </div>`,
+        )
+        .join("")}
+    </div>`
+    : "";
+
+  const projRows = data.projects.filter((p) => p.name);
+  const projHTML = projRows.length
+    ? `
+    <div style="margin-bottom:14px">
+      ${ST("Projects / Thesis")}
+      ${projRows
+        .map(
+          (p, i) => `
+        <div style="margin-top:${i === 0 ? "0" : "10px"}">
+          <div style="display:flex;justify-content:space-between;align-items:baseline">
+            <span style="font-family:${F};font-size:10.5pt;font-weight:bold">${p.name}</span>
+            ${BD(p.duration)}
+          </div>
+          ${p.link ? `<div style="font-family:${F};font-size:9.5pt;color:#1a56db;margin-bottom:2px">🔗 ${p.link}</div>` : ""}
+          ${BL(p.desc)}
+        </div>`,
+        )
+        .join("")}
+    </div>`
+    : "";
+
+  const skillRows = data.skills.filter((s) => s.skills);
+  const skillHTML = skillRows.length
+    ? `
+    <div style="margin-bottom:14px">
+      ${ST("Skills")}
+      ${skillRows
+        .map(
+          (s) => `
+        <div style="display:flex;gap:6px;margin-bottom:3px;font-family:${F};font-size:10pt">
+          ${s.category ? `<span style="font-weight:bold;flex-shrink:0;min-width:120px">${s.category}:</span>` : ""}
+          <span>${s.skills}</span>
+        </div>`,
+        )
+        .join("")}
+    </div>`
+    : "";
+
+  const certRows = data.certifications.filter((c) => c.name);
+  const certHTML = certRows.length
+    ? `
+    <div style="margin-bottom:14px">
+      ${ST("Certifications")}
+      ${certRows
+        .map(
+          (c, i) => `
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:${i === 0 ? "0" : "5px"}">
+          <span style="font-family:${F};font-size:10pt">${c.name}${c.issuer ? ` <i style="color:#444">— ${c.issuer}</i>` : ""}</span>
+          ${BD(c.date)}
+        </div>`,
+        )
+        .join("")}
+    </div>`
+    : "";
+
+  const extraRows = data.extras.filter((e) => e.label && e.value);
+  const extraHTML = extraRows.length
+    ? `
+    <div style="margin-bottom:14px">
+      ${ST("Additional Information")}
+      ${extraRows
+        .map(
+          (e) => `
+        <div style="display:flex;gap:6px;margin-bottom:3px;font-family:${F};font-size:10pt">
+          <span style="font-weight:bold;flex-shrink:0;min-width:140px">${e.label}:</span>
+          <span>${e.value}</span>
+        </div>`,
+        )
+        .join("")}
+    </div>`
+    : "";
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8">
+    <style>* { box-sizing:border-box; margin:0; padding:0; } body { background:white; }</style>
+  </head><body>
+    <div id="cv-root" style="width:794px;padding:53px 68px 60px 68px;background:white;font-family:${F};color:#000">
+      <!-- HEADER -->
+      <div style="display:flex;justify-content:${hasPhoto ? "space-between" : "center"};align-items:flex-start;
+                  border-bottom:2.5px solid #000;padding-bottom:12px;margin-bottom:14px;gap:14px">
+        <div style="flex:${hasPhoto ? "1" : "unset"};text-align:${hasPhoto ? "left" : "center"}">
+          <h1 style="font-family:${F};font-size:26pt;font-weight:bold;text-transform:uppercase;
+                     letter-spacing:1px;line-height:1.05;margin:0 0 5px 0">${data.full_name || "YOUR NAME"}</h1>
+          ${contacts ? `<div style="font-family:${F};font-size:10pt;color:#222;line-height:1.7">${contacts}</div>` : ""}
+          ${
+            socials
+              ? `<div style="font-family:${F};font-size:9.5pt;margin-top:4px;
+                              display:flex;flex-wrap:wrap;gap:12px;
+                              justify-content:${hasPhoto ? "flex-start" : "center"}">${socials}</div>`
+              : ""
+          }
+        </div>
+        ${
+          hasPhoto
+            ? `<div style="width:100px;height:126px;flex-shrink:0;border:1.5px solid #000;overflow:hidden;background:#f0f0f0">
+          <img src="${photo}" crossorigin="anonymous" style="width:100%;height:100%;object-fit:cover;object-position:center top;display:block"/>
+        </div>`
+            : ""
+        }
+      </div>
+      ${summaryHTML}${eduHTML}${expHTML}${projHTML}${skillHTML}${certHTML}${extraHTML}
+    </div>
+  </body></html>`;
 }
 
-interface Section {
-  id: number;
-  title: string;
-  items: Item[];
-  isProject?: boolean;
-}
-
-interface ResumeData {
-  full_name: string;
-  email: string;
-  phone: string;
-  location: string;
-  linkedin: string;
-  github: string;
-  portfolio: string;
-  summary: string;
-  sections: Section[];
-}
-
-const SECTION_PRESETS = [
-  { label: "+ Summary", title: "Professional Summary", isProject: false },
-  { label: "+ Skills", title: "Technical Skills", isProject: false },
-  { label: "+ Experience", title: "Work Experience", isProject: false },
-  { label: "+ Projects", title: "Projects", isProject: true },
-  { label: "+ Education", title: "Education", isProject: false },
-  { label: "+ Certifications", title: "Certifications", isProject: false },
-  { label: "+ References", title: "References", isProject: false },
-];
-
-const FONT = "'Times New Roman', Times, serif";
+// ─── COMPONENT ───────────────────────────────────────────────────────────────
 
 export default function Builder() {
   const [mounted, setMounted] = useState(false);
   const [exportingPDF, setExportingPDF] = useState(false);
   const [exportingDOCX, setExportingDOCX] = useState(false);
+  const [aiLoading, setAiLoading] = useState<string | null>(null);
   const [photo, setPhoto] = useState<string | null>(null);
+  const [resume, setResume] = useState<ResumeData>(initResume);
   const previewRef = useRef<HTMLDivElement>(null);
-
-  const [resume, setResume] = useState<ResumeData>({
-    full_name: "",
-    email: "",
-    phone: "",
-    location: "",
-    linkedin: "",
-    github: "",
-    portfolio: "",
-    summary: "",
-    sections: [],
-  });
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  // ─── BUILD HTML FOR PDF ──────────────────────────────────────────────────────
-  const buildHTML = () => {
-    const photoSrc = photo || "";
-    const hasPhoto = !!photoSrc;
-    const contactLine = [resume.email, resume.phone, resume.location]
-      .filter(Boolean)
-      .join("  |  ");
+  // ─── FIELD UPDATER ───────────────────────────────────────────────────────
+  const setField = (field: keyof ResumeData, val: string) =>
+    setResume((p) => ({ ...p, [field]: val }));
 
-    const socialLinks = [
-      resume.linkedin && `<span><b>LinkedIn:</b> ${resume.linkedin}</span>`,
-      resume.github && `<span><b>GitHub:</b> ${resume.github}</span>`,
-      resume.portfolio && `<span><b>Portfolio:</b> ${resume.portfolio}</span>`,
-    ]
-      .filter(Boolean)
-      .join(`<span style="margin:0 10px;color:#666">|</span>`);
+  function makeUpdaters<T extends { id: number }>(
+    key: keyof ResumeData,
+    blankFn: () => T,
+  ) {
+    const add = () =>
+      setResume((p) => ({ ...p, [key]: [...(p[key] as T[]), blankFn()] }));
+    const remove = (id: number) =>
+      setResume((p) => ({
+        ...p,
+        [key]: (p[key] as T[]).filter((x) => x.id !== id),
+      }));
+    const update = (id: number, f: keyof T, v: string) =>
+      setResume((p) => ({
+        ...p,
+        [key]: (p[key] as T[]).map((x) => (x.id === id ? { ...x, [f]: v } : x)),
+      }));
+    return { add, remove, update };
+  }
 
-    const summaryHTML = resume.summary
-      ? `
-      <div style="margin-bottom:14px">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-          <h2 style="font-size:11pt;font-weight:bold;text-transform:uppercase;letter-spacing:.06em;margin:0;padding:0;white-space:nowrap;flex-shrink:0;font-family:${FONT}">Professional Profile</h2>
-          <div style="flex:1;height:1px;background:#000;min-width:0"></div>
-        </div>
-        <p style="font-size:10.5pt;line-height:1.65;text-align:justify;color:#000;margin:0;font-family:${FONT}">${resume.summary}</p>
-      </div>`
-      : "";
+  const edu = makeUpdaters<EduEntry>("education", blankEdu);
+  const exp = makeUpdaters<ExpEntry>("experience", blankExp);
+  const proj = makeUpdaters<ProjectEntry>("projects", blankProj);
+  const skill = makeUpdaters<SkillEntry>("skills", blankSkill);
+  const cert = makeUpdaters<CertEntry>("certifications", blankCert);
+  const extra = makeUpdaters<ExtraEntry>("extras", blankExtra);
 
-    const sectionsHTML = resume.sections
-      .map(
-        (sec) => `
-      <div style="margin-bottom:14px">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-          <h2 style="font-size:11pt;font-weight:bold;text-transform:uppercase;letter-spacing:.06em;margin:0;padding:0;white-space:nowrap;flex-shrink:0;font-family:${FONT}">${sec.title}</h2>
-          <div style="flex:1;height:1px;background:#000;min-width:0"></div>
-        </div>
-        ${sec.items
-          .map(
-            (item) => `
-          <div style="margin-top:${sec.items.indexOf(item) === 0 ? "0" : "10px"}">
-            ${
-              item.org || item.date
-                ? `
-              <div style="display:flex;justify-content:space-between;font-size:10.5pt;font-weight:bold;color:#000;font-family:${FONT};margin-bottom:2px">
-                <span>${item.org || ""}</span>
-                <span style="font-weight:normal;color:#333">${item.date || ""}</span>
-              </div>`
-                : ""
-            }
-            ${item.link ? `<div style="font-size:9.5pt;color:#1a56db;font-family:${FONT};margin-bottom:3px">🔗 ${item.link}</div>` : ""}
-            ${
-              item.desc
-                ? `
-              <ul style="margin:3px 0 0 20px;padding:0;list-style-type:disc">
-                ${item.desc
-                  .split("\n")
-                  .filter((b) => b.trim())
-                  .map(
-                    (b) =>
-                      `<li style="font-size:10pt;line-height:1.55;color:#000;font-family:${FONT};margin-bottom:2px">${b.trim()}</li>`,
-                  )
-                  .join("")}
-              </ul>`
-                : ""
-            }
-          </div>`,
-          )
-          .join("")}
-      </div>`,
-      )
-      .join("");
-
-    return `<!DOCTYPE html><html><head><meta charset="utf-8">
-      <style>* { box-sizing:border-box; margin:0; padding:0; } body { background:white; }</style>
-    </head><body>
-      <div id="cv-root" style="width:794px;padding:57px 68px;background:white;font-family:${FONT};color:#000">
-        <div style="display:flex;justify-content:${hasPhoto ? "space-between" : "center"};align-items:flex-start;border-bottom:2px solid #000;padding-bottom:12px;margin-bottom:14px;gap:14px">
-          <div style="flex:${hasPhoto ? "1" : "unset"};text-align:${hasPhoto ? "left" : "center"}">
-            <h1 style="font-size:26pt;font-weight:bold;text-transform:uppercase;letter-spacing:1px;line-height:1.1;margin:0 0 5px 0;color:#000;font-family:${FONT}">${resume.full_name || "YOUR NAME"}</h1>
-            ${contactLine ? `<div style="font-size:10pt;color:#222;line-height:1.7;font-family:${FONT}">${contactLine}</div>` : ""}
-            ${socialLinks ? `<div style="font-size:9.5pt;color:#1a56db;font-family:${FONT};margin-top:4px;display:flex;flex-wrap:wrap;gap:14px;justify-content:${hasPhoto ? "flex-start" : "center"}">${socialLinks}</div>` : ""}
-          </div>
-          ${hasPhoto ? `<div style="width:100px;height:126px;flex-shrink:0;border:1.5px solid #000;overflow:hidden;background:#f0f0f0"><img src="${photoSrc}" crossorigin="anonymous" style="width:100%;height:100%;object-fit:cover;object-position:center top;display:block"/></div>` : ""}
-        </div>
-        ${summaryHTML}
-        ${sectionsHTML}
-      </div>
-    </body></html>`;
+  // ─── AI IMPROVE ──────────────────────────────────────────────────────────
+  const aiImprove = async (
+    text: string,
+    ctx: string,
+    onResult: (v: string) => void,
+    key: string,
+  ) => {
+    if (!text.trim()) return;
+    setAiLoading(key);
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 600,
+          messages: [
+            {
+              role: "user",
+              content: `You are an expert CV writer. Improve the following ${ctx} to be more professional, concise, and ATS-friendly. Keep bullet points (one per line). Return ONLY the improved text, no commentary.\n\nOriginal:\n${text}`,
+            },
+          ],
+        }),
+      });
+      const d = await res.json();
+      const improved = d.content
+        ?.find((c: any) => c.type === "text")
+        ?.text?.trim();
+      if (improved) onResult(improved);
+    } catch (e) {
+      console.error("AI error:", e);
+    }
+    setAiLoading(null);
   };
 
-  // ─── PDF EXPORT ──────────────────────────────────────────────────────────────
+  // ─── PDF EXPORT ──────────────────────────────────────────────────────────
   const exportPDF = async () => {
     setExportingPDF(true);
     try {
@@ -164,18 +361,15 @@ export default function Builder() {
         import("html2canvas").then((m) => m.default),
       ]);
 
-      // Write into isolated iframe — no transforms, no Tailwind, no oklch
       const iframe = document.createElement("iframe");
       iframe.style.cssText =
         "position:fixed;top:0;left:-9999px;width:794px;height:1080px;border:none;opacity:0;pointer-events:none;z-index:-1";
       document.body.appendChild(iframe);
-
       const iDoc = iframe.contentDocument!;
       iDoc.open();
-      iDoc.write(buildHTML());
+      iDoc.write(buildPDFHtml(resume, photo));
       iDoc.close();
 
-      // Wait for images
       await Promise.all(
         Array.from(iDoc.images).map((img) =>
           img.complete
@@ -186,12 +380,12 @@ export default function Builder() {
               }),
         ),
       );
-      await new Promise((r) => setTimeout(r, 350));
+      await new Promise((r) => setTimeout(r, 400));
 
       const root = iDoc.getElementById("cv-root") as HTMLElement;
-      const totalHeight = root.scrollHeight;
-      iframe.style.height = totalHeight + "px";
-      await new Promise((r) => setTimeout(r, 100));
+      const totalH = root.scrollHeight;
+      iframe.style.height = totalH + "px";
+      await new Promise((r) => setTimeout(r, 120));
 
       const canvas = await html2canvas(root, {
         scale: 2,
@@ -200,11 +394,10 @@ export default function Builder() {
         backgroundColor: "#ffffff",
         logging: false,
         width: 794,
-        height: totalHeight,
+        height: totalH,
         windowWidth: 794,
-        windowHeight: totalHeight,
+        windowHeight: totalH,
       });
-
       document.body.removeChild(iframe);
 
       const pdf = new jsPDF({
@@ -212,33 +405,23 @@ export default function Builder() {
         unit: "mm",
         format: "a4",
       });
-      const PAGE_W_MM = 210;
-      const PAGE_H_MM = 297;
-      const pxPerMm = canvas.width / PAGE_W_MM; // canvas px per mm
-      const pageHpx = Math.round(PAGE_H_MM * pxPerMm); // canvas px per A4 page
-      const totalPages = Math.ceil(canvas.height / pageHpx);
+      const PW = 210,
+        PH = 297;
+      const pxPerMm = canvas.width / PW;
+      const pageHpx = Math.round(PH * pxPerMm);
+      const pages = Math.ceil(canvas.height / pageHpx);
 
-      for (let page = 0; page < totalPages; page++) {
-        if (page > 0) pdf.addPage();
-
+      for (let p = 0; p < pages; p++) {
+        if (p > 0) pdf.addPage();
         const slice = document.createElement("canvas");
         slice.width = canvas.width;
         slice.height = pageHpx;
         const ctx = slice.getContext("2d")!;
-        ctx.fillStyle = "#ffffff";
+        ctx.fillStyle = "#fff";
         ctx.fillRect(0, 0, slice.width, slice.height);
-        ctx.drawImage(canvas, 0, -(page * pageHpx));
-
-        pdf.addImage(
-          slice.toDataURL("image/jpeg", 0.97),
-          "JPEG",
-          0,
-          0,
-          PAGE_W_MM,
-          PAGE_H_MM,
-        );
+        ctx.drawImage(canvas, 0, -(p * pageHpx));
+        pdf.addImage(slice.toDataURL("image/jpeg", 0.97), "JPEG", 0, 0, PW, PH);
       }
-
       pdf.save(`${resume.full_name || "Resume"}_CV.pdf`);
     } catch (e) {
       console.error("PDF error:", e);
@@ -247,7 +430,7 @@ export default function Builder() {
     setExportingPDF(false);
   };
 
-  // ─── DOCX EXPORT ─────────────────────────────────────────────────────────────
+  // ─── DOCX EXPORT ─────────────────────────────────────────────────────────
   const exportDOCX = async () => {
     setExportingDOCX(true);
     try {
@@ -261,10 +444,27 @@ export default function Builder() {
         ExternalHyperlink,
       } = await import("docx");
       const { saveAs } = await import("file-saver");
-      const children: any[] = [];
+      const TN = "Times New Roman";
+      const ch: any[] = [];
+
+      const SH = (t: string) =>
+        new Paragraph({
+          spacing: { before: 240, after: 60 },
+          border: {
+            bottom: { style: BorderStyle.SINGLE, size: 8, color: "000000" },
+          },
+          children: [
+            new TextRun({
+              text: t.toUpperCase(),
+              bold: true,
+              size: 22,
+              font: TN,
+            }),
+          ],
+        });
 
       // Name
-      children.push(
+      ch.push(
         new Paragraph({
           alignment: AlignmentType.CENTER,
           spacing: { after: 40 },
@@ -273,18 +473,17 @@ export default function Builder() {
               text: (resume.full_name || "YOUR NAME").toUpperCase(),
               bold: true,
               size: 48,
-              font: "Times New Roman",
+              font: TN,
             }),
           ],
         }),
       );
 
-      // Contact
       const contactLine = [resume.email, resume.phone, resume.location]
         .filter(Boolean)
         .join("  |  ");
       if (contactLine)
-        children.push(
+        ch.push(
           new Paragraph({
             alignment: AlignmentType.CENTER,
             spacing: { after: 60 },
@@ -293,29 +492,28 @@ export default function Builder() {
                 text: contactLine,
                 size: 20,
                 color: "444444",
-                font: "Times New Roman",
+                font: TN,
               }),
             ],
           }),
         );
 
-      // Social links
-      const socials = [
+      const socs = [
         resume.linkedin && `LinkedIn: ${resume.linkedin}`,
         resume.github && `GitHub: ${resume.github}`,
         resume.portfolio && `Portfolio: ${resume.portfolio}`,
       ].filter(Boolean) as string[];
-      if (socials.length)
-        children.push(
+      if (socs.length)
+        ch.push(
           new Paragraph({
             alignment: AlignmentType.CENTER,
             spacing: { after: 200 },
             children: [
               new TextRun({
-                text: socials.join("   |   "),
+                text: socs.join("   |   "),
                 size: 18,
                 color: "1a56db",
-                font: "Times New Roman",
+                font: TN,
               }),
             ],
           }),
@@ -323,97 +521,141 @@ export default function Builder() {
 
       // Summary
       if (resume.summary) {
-        children.push(
-          new Paragraph({
-            spacing: { before: 200, after: 60 },
-            border: {
-              bottom: { style: BorderStyle.SINGLE, size: 6, color: "000000" },
-            },
-            children: [
-              new TextRun({
-                text: "PROFESSIONAL PROFILE",
-                bold: true,
-                size: 22,
-                font: "Times New Roman",
-              }),
-            ],
-          }),
+        ch.push(SH("Professional Profile"));
+        ch.push(
           new Paragraph({
             spacing: { after: 200 },
             children: [
-              new TextRun({
-                text: resume.summary,
-                size: 20,
-                font: "Times New Roman",
-              }),
+              new TextRun({ text: resume.summary, size: 20, font: TN }),
             ],
           }),
         );
       }
 
-      // Dynamic sections
-      for (const sec of resume.sections) {
-        children.push(
-          new Paragraph({
-            spacing: { before: 240, after: 60 },
-            border: {
-              bottom: { style: BorderStyle.SINGLE, size: 6, color: "000000" },
-            },
-            children: [
-              new TextRun({
-                text: sec.title.toUpperCase(),
-                bold: true,
-                size: 22,
-                font: "Times New Roman",
-              }),
-            ],
-          }),
-        );
-
-        for (const item of sec.items) {
-          if (item.org || item.date) {
-            children.push(
+      // Education
+      const eduRows = resume.education.filter((e) => e.institution || e.degree);
+      if (eduRows.length) {
+        ch.push(SH("Education"));
+        for (const e of eduRows) {
+          ch.push(
+            new Paragraph({
+              spacing: { before: 80, after: 0 },
+              children: [
+                new TextRun({
+                  text: e.institution,
+                  bold: true,
+                  size: 21,
+                  font: TN,
+                }),
+                e.duration
+                  ? new TextRun({
+                      text: `\t${e.duration}`,
+                      bold: true,
+                      size: 20,
+                      font: TN,
+                    })
+                  : new TextRun(""),
+              ],
+            }),
+          );
+          if (e.degree || e.cgpa)
+            ch.push(
               new Paragraph({
-                spacing: { before: 100, after: 20 },
+                spacing: { after: 40 },
                 children: [
                   new TextRun({
-                    text: item.org || "",
-                    bold: true,
+                    text: e.degree,
                     size: 20,
-                    font: "Times New Roman",
+                    font: TN,
+                    italics: true,
                   }),
-                  ...(item.date
-                    ? [
-                        new TextRun({
-                          text: "  " + item.date,
-                          size: 20,
-                          color: "555555",
-                          font: "Times New Roman",
-                        }),
-                      ]
-                    : []),
+                  e.cgpa
+                    ? new TextRun({
+                        text: `\tCGPA: ${e.cgpa}`,
+                        size: 20,
+                        font: TN,
+                        bold: true,
+                      })
+                    : new TextRun(""),
                 ],
               }),
             );
-          }
-          if (item.link) {
-            children.push(
+        }
+      }
+
+      // Experience
+      const expRows = resume.experience.filter((e) => e.role || e.org);
+      if (expRows.length) {
+        ch.push(SH("Work Experience"));
+        for (const e of expRows) {
+          ch.push(
+            new Paragraph({
+              spacing: { before: 80, after: 0 },
+              children: [
+                new TextRun({ text: e.role, bold: true, size: 21, font: TN }),
+                e.duration
+                  ? new TextRun({
+                      text: `\t${e.duration}`,
+                      bold: true,
+                      size: 20,
+                      font: TN,
+                    })
+                  : new TextRun(""),
+              ],
+            }),
+          );
+          if (e.org)
+            ch.push(
               new Paragraph({
+                spacing: { after: 20 },
+                children: [new TextRun({ text: e.org, size: 20, font: TN })],
+              }),
+            );
+          for (const b of e.desc.split("\n").filter((b) => b.trim()))
+            ch.push(
+              new Paragraph({
+                bullet: { level: 0 },
                 spacing: { after: 30 },
+                children: [new TextRun({ text: b.trim(), size: 20, font: TN })],
+              }),
+            );
+        }
+      }
+
+      // Projects
+      const projRows = resume.projects.filter((p) => p.name);
+      if (projRows.length) {
+        ch.push(SH("Projects / Thesis"));
+        for (const p of projRows) {
+          ch.push(
+            new Paragraph({
+              spacing: { before: 80, after: 0 },
+              children: [
+                new TextRun({ text: p.name, bold: true, size: 21, font: TN }),
+                p.duration
+                  ? new TextRun({
+                      text: `\t${p.duration}`,
+                      bold: true,
+                      size: 20,
+                      font: TN,
+                    })
+                  : new TextRun(""),
+              ],
+            }),
+          );
+          if (p.link)
+            ch.push(
+              new Paragraph({
+                spacing: { after: 20 },
                 children: [
-                  new TextRun({
-                    text: "Link: ",
-                    size: 19,
-                    font: "Times New Roman",
-                    color: "444444",
-                  }),
+                  new TextRun({ text: "Link: ", size: 19, font: TN }),
                   new ExternalHyperlink({
-                    link: item.link,
+                    link: p.link,
                     children: [
                       new TextRun({
-                        text: item.link,
+                        text: p.link,
                         size: 19,
-                        font: "Times New Roman",
+                        font: TN,
                         color: "1a56db",
                         underline: {},
                       }),
@@ -422,30 +664,93 @@ export default function Builder() {
                 ],
               }),
             );
-          }
-          if (item.desc) {
-            for (const bullet of item.desc
-              .split("\n")
-              .filter((b) => b.trim())) {
-              children.push(
-                new Paragraph({
-                  bullet: { level: 0 },
-                  spacing: { after: 40 },
-                  children: [
-                    new TextRun({
-                      text: bullet.trim(),
-                      size: 20,
-                      font: "Times New Roman",
-                    }),
-                  ],
-                }),
-              );
-            }
-          }
+          for (const b of p.desc.split("\n").filter((b) => b.trim()))
+            ch.push(
+              new Paragraph({
+                bullet: { level: 0 },
+                spacing: { after: 30 },
+                children: [new TextRun({ text: b.trim(), size: 20, font: TN })],
+              }),
+            );
         }
       }
 
-      const doc = new Document({ sections: [{ children }] });
+      // Skills
+      const skillRows = resume.skills.filter((s) => s.skills);
+      if (skillRows.length) {
+        ch.push(SH("Skills"));
+        for (const s of skillRows)
+          ch.push(
+            new Paragraph({
+              spacing: { after: 30 },
+              children: [
+                s.category
+                  ? new TextRun({
+                      text: `${s.category}: `,
+                      bold: true,
+                      size: 20,
+                      font: TN,
+                    })
+                  : new TextRun(""),
+                new TextRun({ text: s.skills, size: 20, font: TN }),
+              ],
+            }),
+          );
+      }
+
+      // Certifications
+      const certRows = resume.certifications.filter((c) => c.name);
+      if (certRows.length) {
+        ch.push(SH("Certifications"));
+        for (const c of certRows)
+          ch.push(
+            new Paragraph({
+              spacing: { after: 30 },
+              children: [
+                new TextRun({ text: c.name, size: 20, font: TN }),
+                c.issuer
+                  ? new TextRun({
+                      text: ` — ${c.issuer}`,
+                      size: 20,
+                      font: TN,
+                      italics: true,
+                    })
+                  : new TextRun(""),
+                c.date
+                  ? new TextRun({
+                      text: `\t${c.date}`,
+                      bold: true,
+                      size: 20,
+                      font: TN,
+                    })
+                  : new TextRun(""),
+              ],
+            }),
+          );
+      }
+
+      // Extras
+      const extraRows = resume.extras.filter((e) => e.label && e.value);
+      if (extraRows.length) {
+        ch.push(SH("Additional Information"));
+        for (const e of extraRows)
+          ch.push(
+            new Paragraph({
+              spacing: { after: 30 },
+              children: [
+                new TextRun({
+                  text: `${e.label}: `,
+                  bold: true,
+                  size: 20,
+                  font: TN,
+                }),
+                new TextRun({ text: e.value, size: 20, font: TN }),
+              ],
+            }),
+          );
+      }
+
+      const doc = new Document({ sections: [{ children: ch }] });
       saveAs(
         await Packer.toBlob(doc),
         `${resume.full_name || "Resume"}_CV.docx`,
@@ -457,142 +762,58 @@ export default function Builder() {
     setExportingDOCX(false);
   };
 
-  // ─── STATE HELPERS ────────────────────────────────────────────────────────────
-  const addSection = (title: string, isProject: boolean) =>
-    setResume((p) => ({
-      ...p,
-      sections: [
-        ...p.sections,
-        {
-          id: Date.now(),
-          title: title.toUpperCase(),
-          isProject,
-          items: [
-            { id: Date.now() + 1, org: "", date: "", desc: "", link: "" },
-          ],
-        },
-      ],
-    }));
-
-  const removeSection = (id: number) =>
-    setResume((p) => ({
-      ...p,
-      sections: p.sections.filter((s) => s.id !== id),
-    }));
-
-  const updateField = (field: keyof ResumeData, val: string) =>
-    setResume((p) => ({ ...p, [field]: val }));
-
-  const updateItem = (
-    secId: number,
-    itemId: number,
-    field: keyof Item,
-    val: string,
-  ) =>
-    setResume((p) => ({
-      ...p,
-      sections: p.sections.map((s) =>
-        s.id !== secId
-          ? s
-          : {
-              ...s,
-              items: s.items.map((it) =>
-                it.id === itemId ? { ...it, [field]: val } : it,
-              ),
-            },
-      ),
-    }));
-
-  const addItem = (secId: number) =>
-    setResume((p) => ({
-      ...p,
-      sections: p.sections.map((s) =>
-        s.id !== secId
-          ? s
-          : {
-              ...s,
-              items: [
-                ...s.items,
-                { id: Date.now(), org: "", date: "", desc: "", link: "" },
-              ],
-            },
-      ),
-    }));
-
-  const removeItem = (secId: number, itemId: number) =>
-    setResume((p) => ({
-      ...p,
-      sections: p.sections.map((s) =>
-        s.id !== secId
-          ? s
-          : { ...s, items: s.items.filter((it) => it.id !== itemId) },
-      ),
-    }));
-
   if (!mounted) return null;
   const isExporting = exportingPDF || exportingDOCX;
 
+  // ─── RENDER ──────────────────────────────────────────────────────────────
   return (
     <>
       <style>{`
-        .dada-input {
-          width:100%; background:rgba(15,23,42,.6);
-          border:1px solid rgba(100,116,139,.25); border-radius:12px;
-          padding:10px 14px; color:#e2e8f0; font-size:13px;
-          outline:none; transition:border-color .2s,box-shadow .2s;
-          resize:none; font-family:inherit;
-        }
-        .dada-input:focus { border-color:#3b82f6; box-shadow:0 0 0 3px rgba(59,130,246,.15); }
-        .dada-input::placeholder { color:#475569; }
+        .di { width:100%; background:rgba(15,23,42,.6); border:1px solid rgba(100,116,139,.25);
+              border-radius:10px; padding:9px 13px; color:#e2e8f0; font-size:13px;
+              outline:none; transition:border-color .2s,box-shadow .2s; resize:none; font-family:inherit; }
+        .di:focus { border-color:#3b82f6; box-shadow:0 0 0 3px rgba(59,130,246,.15); }
+        .di::placeholder { color:#475569; }
 
-        .action-btn {
-          display:inline-flex; align-items:center; gap:6px;
-          padding:8px 16px; border-radius:10px; font-size:12px;
-          font-weight:700; letter-spacing:.05em; border:none;
-          cursor:pointer; color:#fff;
-          transition:transform .15s,box-shadow .15s,filter .15s;
-        }
-        .action-btn:hover { transform:translateY(-1px) scale(1.03); filter:brightness(1.1); box-shadow:0 6px 20px rgba(0,0,0,.35); }
-        .action-btn:active { transform:translateY(1px) scale(0.97); }
-        .action-btn:disabled { opacity:.6; cursor:not-allowed; transform:none; }
+        .abtn { display:inline-flex; align-items:center; gap:6px; padding:8px 16px;
+                border-radius:10px; font-size:12px; font-weight:700; border:none;
+                cursor:pointer; color:#fff; transition:transform .15s,box-shadow .15s,filter .15s; }
+        .abtn:hover { transform:translateY(-1px) scale(1.03); filter:brightness(1.1); box-shadow:0 6px 20px rgba(0,0,0,.4); }
+        .abtn:active { transform:translateY(1px) scale(.97); }
+        .abtn:disabled { opacity:.55; cursor:not-allowed; transform:none; }
 
-        .tab-btn {
-          white-space:nowrap; padding:7px 14px; border-radius:999px;
-          background:rgba(30,41,59,.7); border:1px solid rgba(100,116,139,.2);
-          color:#94a3b8; font-size:11px; font-weight:700; cursor:pointer; transition:all .2s;
-        }
-        .tab-btn:hover { background:#1e40af; color:#fff; border-color:#3b82f6; transform:translateY(-1px); }
+        .aibtn { display:inline-flex; align-items:center; gap:5px; padding:5px 10px;
+                 border-radius:8px; font-size:11px; font-weight:600; border:none;
+                 cursor:pointer; background:rgba(99,102,241,.12); color:#a5b4fc;
+                 border:1px solid rgba(99,102,241,.25); transition:all .2s; }
+        .aibtn:hover { background:rgba(99,102,241,.22); color:#c7d2fe; }
+        .aibtn:disabled { opacity:.5; cursor:not-allowed; }
 
-        .icon-btn {
-          display:inline-flex; align-items:center; justify-content:center;
-          width:28px; height:28px; border-radius:8px; border:none;
-          cursor:pointer; transition:all .15s; background:transparent;
-        }
+        .add-btn { display:flex; align-items:center; gap:5px; margin-top:10px;
+                   padding:5px 12px; border-radius:8px; background:rgba(59,130,246,.07);
+                   border:1px dashed rgba(59,130,246,.3); color:#60a5fa; font-size:11px;
+                   font-weight:600; cursor:pointer; transition:all .2s; width:fit-content; }
+        .add-btn:hover { background:rgba(59,130,246,.14); border-color:#3b82f6; }
+
+        .icon-btn { display:inline-flex; align-items:center; justify-content:center;
+                    width:26px; height:26px; border-radius:7px; border:none;
+                    cursor:pointer; transition:all .15s; background:transparent; }
         .icon-btn:hover { background:rgba(239,68,68,.15); }
-        .icon-btn:active { transform:scale(.9); }
 
-        .add-item-btn {
-          display:flex; align-items:center; gap:6px; margin-top:12px;
-          padding:6px 12px; border-radius:8px;
-          background:rgba(59,130,246,.08); border:1px dashed rgba(59,130,246,.3);
-          color:#60a5fa; font-size:11px; font-weight:600; cursor:pointer; transition:all .2s; width:fit-content;
-        }
-        .add-item-btn:hover { background:rgba(59,130,246,.15); border-color:#3b82f6; }
+        .sec-box { padding:20px 22px; background:rgba(15,23,42,.5);
+                   border:1px solid rgba(51,65,85,.7); border-radius:20px; margin-bottom:12px; }
+        .sec-label { font-size:9px; font-weight:900; letter-spacing:.18em; text-transform:uppercase;
+                     color:#475569; margin-bottom:10px; }
+        .entry-divider { border:none; border-top:1px solid rgba(51,65,85,.5); margin:14px 0; }
 
         .scrollbar-hide::-webkit-scrollbar { display:none; }
         .scrollbar-hide { -ms-overflow-style:none; scrollbar-width:none; }
 
-        .link-row {
-          display:flex; align-items:center; gap:8px;
-          background:rgba(15,23,42,.6); border:1px solid rgba(59,130,246,.25);
-          border-radius:12px; padding:9px 14px; margin-top:8px;
-        }
-        .link-row input {
-          flex:1; background:transparent; border:none; outline:none;
-          color:#93c5fd; font-size:12px; font-family:inherit;
-        }
+        .link-row { display:flex; align-items:center; gap:8px; background:rgba(15,23,42,.6);
+                    border:1px solid rgba(59,130,246,.25); border-radius:10px; padding:8px 13px; }
+        .link-row input { flex:1; background:transparent; border:none; outline:none;
+                          color:#93c5fd; font-size:12px; font-family:inherit; }
         .link-row input::placeholder { color:#334155; }
-        .link-row svg { flex-shrink:0; }
       `}</style>
 
       <div className="flex flex-col lg:flex-row min-h-screen bg-[#030712] text-slate-200">
@@ -619,10 +840,10 @@ export default function Builder() {
           )}
         </AnimatePresence>
 
-        {/* ── LEFT EDITOR ── */}
-        <div className="w-full lg:w-1/2 p-6 lg:p-10 overflow-y-auto max-h-screen border-r border-white/5 scrollbar-hide">
+        {/* ══ LEFT EDITOR ═══════════════════════════════════════════════════ */}
+        <div className="w-full lg:w-1/2 p-6 lg:p-10 overflow-y-auto max-h-screen scrollbar-hide border-r border-white/5">
           {/* Top bar */}
-          <header className="flex justify-between items-center mb-10">
+          <header className="flex justify-between items-center mb-8">
             <h1 className="text-3xl font-black text-blue-500 italic tracking-tighter">
               CV DADA
             </h1>
@@ -630,7 +851,7 @@ export default function Builder() {
               <button
                 onClick={exportPDF}
                 disabled={isExporting}
-                className="action-btn"
+                className="abtn"
                 style={{
                   background: "linear-gradient(135deg,#2563eb,#1d4ed8)",
                 }}
@@ -645,7 +866,7 @@ export default function Builder() {
               <button
                 onClick={exportDOCX}
                 disabled={isExporting}
-                className="action-btn"
+                className="abtn"
                 style={{
                   background: "linear-gradient(135deg,#334155,#1e293b)",
                 }}
@@ -660,14 +881,14 @@ export default function Builder() {
             </div>
           </header>
 
-          {/* Photo upload */}
-          <div className="mb-8 p-5 bg-slate-900/40 border border-blue-500/20 rounded-3xl flex items-center gap-6">
-            <label className="cursor-pointer block">
+          {/* ── 0. PHOTO ── */}
+          <div className="sec-box flex items-center gap-5 mb-2">
+            <label className="cursor-pointer">
               <div
                 style={{
                   width: 88,
                   height: 110,
-                  borderRadius: 12,
+                  borderRadius: 10,
                   overflow: "hidden",
                   border: photo ? "2px solid #3b82f6" : "2px dashed #334155",
                   background: "#0f172a",
@@ -679,7 +900,7 @@ export default function Builder() {
                 {photo ? (
                   <img
                     src={photo}
-                    alt="Profile"
+                    alt=""
                     style={{
                       width: "100%",
                       height: "100%",
@@ -689,7 +910,7 @@ export default function Builder() {
                     }}
                   />
                 ) : (
-                  <ImageIcon size={24} color="#475569" />
+                  <ImageIcon size={22} color="#475569" />
                 )}
               </div>
               <input
@@ -723,206 +944,453 @@ export default function Builder() {
             </div>
           </div>
 
-          {/* Core fields */}
-          <div className="grid grid-cols-2 gap-3 mb-4">
-            {(
-              [
-                ["full_name", "Full Name"],
-                ["email", "Email Address"],
-                ["phone", "Phone Number"],
-                ["location", "Location"],
-              ] as const
-            ).map(([field, ph]) => (
+          {/* ── 1. PERSONAL INFO ── */}
+          <div className="sec-box">
+            <div className="sec-label">1 · Personal Information</div>
+            <div className="grid grid-cols-2 gap-2 mb-2">
               <input
-                key={field}
-                className="dada-input"
-                placeholder={ph}
-                value={resume[field]}
-                onChange={(e) => updateField(field, e.target.value)}
+                className="di text-xs col-span-2"
+                placeholder="Full Name"
+                value={resume.full_name}
+                onChange={(e) => setField("full_name", e.target.value)}
               />
-            ))}
+              <input
+                className="di text-xs"
+                placeholder="Email Address"
+                value={resume.email}
+                onChange={(e) => setField("email", e.target.value)}
+              />
+              <input
+                className="di text-xs"
+                placeholder="Phone Number"
+                value={resume.phone}
+                onChange={(e) => setField("phone", e.target.value)}
+              />
+              <input
+                className="di text-xs col-span-2"
+                placeholder="Location  e.g. Dhaka, Bangladesh"
+                value={resume.location}
+                onChange={(e) => setField("location", e.target.value)}
+              />
+            </div>
+            <div className="sec-label mt-3">Profile Links (optional)</div>
+            <div className="space-y-2">
+              <input
+                className="di text-xs"
+                placeholder="LinkedIn  e.g. linkedin.com/in/yourname"
+                value={resume.linkedin}
+                onChange={(e) => setField("linkedin", e.target.value)}
+              />
+              <input
+                className="di text-xs"
+                placeholder="GitHub  e.g. github.com/yourname"
+                value={resume.github}
+                onChange={(e) => setField("github", e.target.value)}
+              />
+              <input
+                className="di text-xs"
+                placeholder="Portfolio / Website"
+                value={resume.portfolio}
+                onChange={(e) => setField("portfolio", e.target.value)}
+              />
+            </div>
           </div>
 
-          {/* Social / Portfolio links */}
-          <div className="mb-6 p-4 bg-slate-900/30 border border-slate-800 rounded-2xl space-y-3">
-            <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest mb-2">
-              Profile Links
-            </p>
-            {(
-              [
-                ["linkedin", "LinkedIn URL  e.g. linkedin.com/in/yourname"],
-                ["github", "GitHub URL  e.g. github.com/yourname"],
-                ["portfolio", "Portfolio / Website URL"],
-              ] as const
-            ).map(([field, ph]) => (
-              <input
-                key={field}
-                className="dada-input text-xs"
-                placeholder={ph}
-                value={resume[field]}
-                onChange={(e) => updateField(field, e.target.value)}
-              />
-            ))}
-          </div>
-
-          {/* Summary */}
-          <div className="mb-6">
+          {/* ── 2. SUMMARY ── */}
+          <div className="sec-box">
+            <div className="flex justify-between items-center mb-2">
+              <div className="sec-label mb-0">
+                2 · Professional Summary (optional)
+              </div>
+              <button
+                className="aibtn"
+                disabled={!!aiLoading}
+                onClick={() =>
+                  aiImprove(
+                    resume.summary,
+                    "professional summary",
+                    (v) => setField("summary", v),
+                    "summary",
+                  )
+                }
+              >
+                {aiLoading === "summary" ? (
+                  <Loader2 size={10} className="animate-spin" />
+                ) : (
+                  <Sparkles size={10} />
+                )}{" "}
+                AI
+              </button>
+            </div>
             <textarea
-              className="dada-input min-h-[80px]"
-              placeholder="Professional Summary / Bio…"
+              className="di min-h-[80px] text-xs"
+              placeholder="Write a 2–3 sentence professional profile…"
               value={resume.summary}
-              onChange={(e) => updateField("summary", e.target.value)}
+              onChange={(e) => setField("summary", e.target.value)}
             />
           </div>
 
-          {/* Section preset buttons */}
-          <div className="flex gap-2 overflow-x-auto pb-3 scrollbar-hide mb-6">
-            {SECTION_PRESETS.map((p) => (
-              <button
-                key={p.title}
-                className="tab-btn"
-                onClick={() => addSection(p.title, p.isProject)}
-              >
-                {p.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Dynamic sections */}
-          <div className="space-y-5 pb-24">
-            <AnimatePresence mode="popLayout">
-              {resume.sections.map((sec) => (
-                <motion.div
-                  key={sec.id}
-                  layout
-                  initial={{ opacity: 0, y: 14, scale: 0.97 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  transition={{ duration: 0.2 }}
-                  className="p-6 bg-slate-900/30 border border-slate-800 rounded-3xl"
-                >
-                  {/* Section header row */}
-                  <div className="flex justify-between items-center mb-5 border-b border-white/5 pb-3">
-                    <span className="text-blue-400 font-black text-[10px] tracking-[.2em]">
-                      {sec.title}
-                    </span>
+          {/* ── 3. EDUCATION ── */}
+          <div className="sec-box">
+            <div className="sec-label">3 · Education</div>
+            {resume.education.map((e, idx) => (
+              <div key={e.id}>
+                {idx > 0 && <hr className="entry-divider" />}
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-[10px] text-slate-600 font-bold">
+                    Degree {idx + 1}
+                  </span>
+                  {idx > 0 && (
                     <button
                       className="icon-btn"
-                      onClick={() => removeSection(sec.id)}
+                      onClick={() => edu.remove(e.id)}
                     >
-                      <Trash2 size={14} color="#f87171" />
+                      <Trash2 size={12} color="#f87171" />
                     </button>
-                  </div>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-2 mb-2">
+                  <input
+                    className="di text-xs col-span-2"
+                    placeholder="University / Institution"
+                    value={e.institution}
+                    onChange={(ev) =>
+                      edu.update(e.id, "institution", ev.target.value)
+                    }
+                  />
+                  <input
+                    className="di text-xs col-span-2"
+                    placeholder="Degree / Program  e.g. BSc Computer Science"
+                    value={e.degree}
+                    onChange={(ev) =>
+                      edu.update(e.id, "degree", ev.target.value)
+                    }
+                  />
+                  <input
+                    className="di text-xs"
+                    placeholder="Duration  e.g. 2020 – 2024"
+                    value={e.duration}
+                    onChange={(ev) =>
+                      edu.update(e.id, "duration", ev.target.value)
+                    }
+                  />
+                  <input
+                    className="di text-xs"
+                    placeholder="CGPA  e.g. 3.75 / 4.00"
+                    value={e.cgpa}
+                    onChange={(ev) => edu.update(e.id, "cgpa", ev.target.value)}
+                  />
+                </div>
+              </div>
+            ))}
+            <button className="add-btn" onClick={edu.add}>
+              + Add Degree
+            </button>
+          </div>
 
-                  {/* Items */}
-                  <div className="space-y-6">
-                    {sec.items.map((item, idx) => (
-                      <div key={item.id} className="space-y-3">
-                        {idx > 0 && (
-                          <div className="flex justify-end">
-                            <button
-                              className="icon-btn"
-                              onClick={() => removeItem(sec.id, item.id)}
-                            >
-                              <Trash2 size={12} color="#f87171" />
-                            </button>
-                          </div>
-                        )}
-
-                        <div className="grid grid-cols-2 gap-3">
-                          <input
-                            className="dada-input text-xs"
-                            placeholder={
-                              sec.isProject
-                                ? "Project Name"
-                                : "Organization / Role"
-                            }
-                            value={item.org}
-                            onChange={(e) =>
-                              updateItem(sec.id, item.id, "org", e.target.value)
-                            }
-                          />
-                          <input
-                            className="dada-input text-xs"
-                            placeholder="Date range"
-                            value={item.date}
-                            onChange={(e) =>
-                              updateItem(
-                                sec.id,
-                                item.id,
-                                "date",
-                                e.target.value,
-                              )
-                            }
-                          />
-                        </div>
-
-                        {/* Project link field — shown for ALL sections but labelled for projects */}
-                        {sec.isProject && (
-                          <div className="link-row">
-                            <svg
-                              width="13"
-                              height="13"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="#60a5fa"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            >
-                              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-                              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-                            </svg>
-                            <input
-                              placeholder="Project link (GitHub / Live demo / etc.)"
-                              value={item.link || ""}
-                              onChange={(e) =>
-                                updateItem(
-                                  sec.id,
-                                  item.id,
-                                  "link",
-                                  e.target.value,
-                                )
-                              }
-                            />
-                          </div>
-                        )}
-
-                        <textarea
-                          className="dada-input min-h-[90px] text-xs font-mono"
-                          placeholder="Details — one bullet per line…"
-                          value={item.desc}
-                          onChange={(e) =>
-                            updateItem(sec.id, item.id, "desc", e.target.value)
-                          }
-                        />
-                      </div>
-                    ))}
-                  </div>
-
+          {/* ── 4. EXPERIENCE ── */}
+          <div className="sec-box">
+            <div className="sec-label">4 · Work Experience</div>
+            {resume.experience.map((e, idx) => (
+              <div key={e.id}>
+                {idx > 0 && <hr className="entry-divider" />}
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-[10px] text-slate-600 font-bold">
+                    Job {idx + 1}
+                  </span>
+                  {idx > 0 && (
+                    <button
+                      className="icon-btn"
+                      onClick={() => exp.remove(e.id)}
+                    >
+                      <Trash2 size={12} color="#f87171" />
+                    </button>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-2 mb-2">
+                  <input
+                    className="di text-xs col-span-2"
+                    placeholder="Role / Position"
+                    value={e.role}
+                    onChange={(ev) => exp.update(e.id, "role", ev.target.value)}
+                  />
+                  <input
+                    className="di text-xs col-span-2"
+                    placeholder="Company / Organization"
+                    value={e.org}
+                    onChange={(ev) => exp.update(e.id, "org", ev.target.value)}
+                  />
+                  <input
+                    className="di text-xs col-span-2"
+                    placeholder="Duration  e.g. Jan 2022 – Present"
+                    value={e.duration}
+                    onChange={(ev) =>
+                      exp.update(e.id, "duration", ev.target.value)
+                    }
+                  />
+                </div>
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-[9px] text-slate-600 font-bold uppercase tracking-widest">
+                    Responsibilities
+                  </span>
                   <button
-                    className="add-item-btn"
-                    onClick={() => addItem(sec.id)}
+                    className="aibtn"
+                    disabled={!!aiLoading}
+                    onClick={() =>
+                      aiImprove(
+                        e.desc,
+                        "work experience description",
+                        (v) => exp.update(e.id, "desc", v),
+                        `exp-${e.id}`,
+                      )
+                    }
                   >
-                    <span style={{ fontSize: 14 }}>+</span> Add Entry
+                    {aiLoading === `exp-${e.id}` ? (
+                      <Loader2 size={10} className="animate-spin" />
+                    ) : (
+                      <Sparkles size={10} />
+                    )}{" "}
+                    AI
                   </button>
-                </motion.div>
-              ))}
-            </AnimatePresence>
+                </div>
+                <textarea
+                  className="di min-h-[80px] text-xs font-mono"
+                  placeholder="Bullet points — one per line…"
+                  value={e.desc}
+                  onChange={(ev) => exp.update(e.id, "desc", ev.target.value)}
+                />
+              </div>
+            ))}
+            <button className="add-btn" onClick={exp.add}>
+              + Add Job
+            </button>
+          </div>
+
+          {/* ── 5. PROJECTS ── */}
+          <div className="sec-box">
+            <div className="sec-label">5 · Projects / Thesis / Research</div>
+            {resume.projects.map((p, idx) => (
+              <div key={p.id}>
+                {idx > 0 && <hr className="entry-divider" />}
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-[10px] text-slate-600 font-bold">
+                    Project {idx + 1}
+                  </span>
+                  {idx > 0 && (
+                    <button
+                      className="icon-btn"
+                      onClick={() => proj.remove(p.id)}
+                    >
+                      <Trash2 size={12} color="#f87171" />
+                    </button>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-2 mb-2">
+                  <input
+                    className="di text-xs col-span-2"
+                    placeholder="Project / Thesis Title"
+                    value={p.name}
+                    onChange={(ev) =>
+                      proj.update(p.id, "name", ev.target.value)
+                    }
+                  />
+                  <input
+                    className="di text-xs col-span-2"
+                    placeholder="Duration  e.g. 2023 – 2024"
+                    value={p.duration}
+                    onChange={(ev) =>
+                      proj.update(p.id, "duration", ev.target.value)
+                    }
+                  />
+                </div>
+                <div className="link-row mb-2">
+                  <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="#60a5fa"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                  </svg>
+                  <input
+                    placeholder="GitHub / Live demo / Paper link"
+                    value={p.link}
+                    onChange={(ev) =>
+                      proj.update(p.id, "link", ev.target.value)
+                    }
+                  />
+                </div>
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-[9px] text-slate-600 font-bold uppercase tracking-widest">
+                    Description
+                  </span>
+                  <button
+                    className="aibtn"
+                    disabled={!!aiLoading}
+                    onClick={() =>
+                      aiImprove(
+                        p.desc,
+                        "project description",
+                        (v) => proj.update(p.id, "desc", v),
+                        `proj-${p.id}`,
+                      )
+                    }
+                  >
+                    {aiLoading === `proj-${p.id}` ? (
+                      <Loader2 size={10} className="animate-spin" />
+                    ) : (
+                      <Sparkles size={10} />
+                    )}{" "}
+                    AI
+                  </button>
+                </div>
+                <textarea
+                  className="di min-h-[70px] text-xs font-mono"
+                  placeholder="Bullet points — one per line…"
+                  value={p.desc}
+                  onChange={(ev) => proj.update(p.id, "desc", ev.target.value)}
+                />
+              </div>
+            ))}
+            <button className="add-btn" onClick={proj.add}>
+              + Add Project
+            </button>
+          </div>
+
+          {/* ── 6. SKILLS ── */}
+          <div className="sec-box">
+            <div className="sec-label">6 · Skills</div>
+            {resume.skills.map((s, idx) => (
+              <div key={s.id} className="flex gap-2 mb-2 items-center">
+                <input
+                  className="di text-xs"
+                  style={{ maxWidth: 130 }}
+                  placeholder="Category"
+                  value={s.category}
+                  onChange={(e) =>
+                    skill.update(s.id, "category", e.target.value)
+                  }
+                />
+                <input
+                  className="di text-xs flex-1"
+                  placeholder="Python, React, Docker…"
+                  value={s.skills}
+                  onChange={(e) => skill.update(s.id, "skills", e.target.value)}
+                />
+                {idx > 0 && (
+                  <button
+                    className="icon-btn"
+                    onClick={() => skill.remove(s.id)}
+                  >
+                    <Trash2 size={12} color="#f87171" />
+                  </button>
+                )}
+              </div>
+            ))}
+            <button className="add-btn" onClick={skill.add}>
+              + Add Category
+            </button>
+          </div>
+
+          {/* ── 7. CERTIFICATIONS ── */}
+          <div className="sec-box">
+            <div className="sec-label">7 · Certifications (optional)</div>
+            {resume.certifications.map((c, idx) => (
+              <div
+                key={c.id}
+                className="grid grid-cols-2 gap-2 mb-2 items-center"
+              >
+                <input
+                  className="di text-xs col-span-2"
+                  placeholder="Certificate Name"
+                  value={c.name}
+                  onChange={(e) => cert.update(c.id, "name", e.target.value)}
+                />
+                <input
+                  className="di text-xs"
+                  placeholder="Issuer  e.g. Coursera"
+                  value={c.issuer}
+                  onChange={(e) => cert.update(c.id, "issuer", e.target.value)}
+                />
+                <div className="flex gap-2 items-center">
+                  <input
+                    className="di text-xs flex-1"
+                    placeholder="Date  e.g. 2023"
+                    value={c.date}
+                    onChange={(e) => cert.update(c.id, "date", e.target.value)}
+                  />
+                  {idx > 0 && (
+                    <button
+                      className="icon-btn"
+                      onClick={() => cert.remove(c.id)}
+                    >
+                      <Trash2 size={12} color="#f87171" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+            <button className="add-btn" onClick={cert.add}>
+              + Add Certificate
+            </button>
+          </div>
+
+          {/* ── 8. ADDITIONAL INFO ── */}
+          <div className="sec-box pb-6">
+            <div className="sec-label">
+              8 · Additional Information (optional)
+            </div>
+            {resume.extras.map((e, idx) => (
+              <div key={e.id} className="flex gap-2 mb-2 items-center">
+                <input
+                  className="di text-xs"
+                  style={{ maxWidth: 150 }}
+                  placeholder="Label  e.g. Languages"
+                  value={e.label}
+                  onChange={(ev) =>
+                    extra.update(e.id, "label", ev.target.value)
+                  }
+                />
+                <input
+                  className="di text-xs flex-1"
+                  placeholder="Value"
+                  value={e.value}
+                  onChange={(ev) =>
+                    extra.update(e.id, "value", ev.target.value)
+                  }
+                />
+                {idx > 0 && (
+                  <button
+                    className="icon-btn"
+                    onClick={() => extra.remove(e.id)}
+                  >
+                    <Trash2 size={12} color="#f87171" />
+                  </button>
+                )}
+              </div>
+            ))}
+            <button className="add-btn" onClick={extra.add}>
+              + Add Row
+            </button>
           </div>
         </div>
+        {/* end LEFT */}
 
-        {/* ── RIGHT PREVIEW ── */}
+        {/* ══ RIGHT PREVIEW ═════════════════════════════════════════════════ */}
         <div
           className="hidden lg:block w-full lg:w-1/2 bg-[#010413] overflow-y-auto scrollbar-hide"
           style={{ minHeight: "100vh" }}
         >
-          {/* The scaler wrapper grows with the CV — no fixed height clipping */}
           <div
             style={{
               display: "flex",
               justifyContent: "center",
-              padding: "40px 20px",
+              padding: "40px 0",
               minHeight: "100%",
             }}
           >
@@ -930,15 +1398,10 @@ export default function Builder() {
               style={{
                 transformOrigin: "top center",
                 transform: "scale(0.65)",
-                // Let height grow naturally so 2-page CVs are visible
                 alignSelf: "flex-start",
               }}
             >
-              <StandardCV
-                data={resume}
-                photo={photo}
-                previewRef={previewRef as any}
-              />
+              <StandardCV data={resume} photo={photo} previewRef={previewRef} />
             </div>
           </div>
         </div>

@@ -305,14 +305,6 @@ function buildPDFHtml(data: ResumeData, photo: string | null): string {
 }
 
 // ─── AI CV GENERATOR ─────────────────────────────────────────────────────────
-interface AnthropicContent {
-  type: string;
-  text?: string;
-}
-interface AnthropicResponse {
-  content?: AnthropicContent[];
-}
-
 interface ParsedResume {
   full_name?: string;
   email?: string;
@@ -322,21 +314,21 @@ interface ParsedResume {
   github?: string;
   portfolio?: string;
   summary?: string;
-  education?: Omit<EduEntry, "id">[];
-  experience?: Omit<ExpEntry, "id">[];
-  projects?: Omit<ProjectEntry, "id">[];
-  skills?: Omit<SkillEntry, "id">[];
-  certifications?: Omit<CertEntry, "id">[];
-  references?: Omit<RefEntry, "id">[];
-  extras?: Omit<ExtraEntry, "id">[];
+  education?: any[];
+  experience?: any[];
+  projects?: any[];
+  skills?: any[];
+  certifications?: any[];
+  references?: any[];
+  extras?: any[];
 }
-
 async function generateCVWithAI(
   brief: string,
   setResume: (r: ResumeData) => void,
   setStatus: (s: string) => void,
 ) {
   setStatus("Calling AI…");
+
   try {
     const res = await fetch("/api/ai", {
       method: "POST",
@@ -344,17 +336,41 @@ async function generateCVWithAI(
       body: JSON.stringify({ prompt: brief, max_tokens: 2000 }),
     });
 
-    setStatus("Parsing response…");
     const d = (await res.json()) as { text?: string; error?: string };
-    if (d.error) throw new Error(d.error);
-    const raw = d.text?.trim() ?? "";
-    const jsonStr = raw
-      .replace(/^```json\s*/i, "")
-      .replace(/^```\s*/i, "")
-      .replace(/```\s*$/i, "")
-      .trim();
-    const parsed = JSON.parse(jsonStr) as ParsedResume;
 
+    if (d.error) throw new Error(d.error);
+
+    const raw = d.text?.trim() ?? "";
+
+    console.log("🧠 RAW AI OUTPUT:", raw);
+
+    setStatus("Parsing response…");
+
+    // 🔥 STRONG JSON EXTRACTION (handles messy AI output)
+    let jsonStr = "";
+
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (match) {
+      jsonStr = match[0];
+    } else {
+      console.error("❌ No JSON found in AI response");
+      setStatus("error");
+      alert("AI response invalid. Try again.");
+      return;
+    }
+
+    let parsed: ParsedResume = {};
+
+    try {
+      parsed = JSON.parse(jsonStr);
+    } catch (e) {
+      console.error("❌ JSON parse failed:", jsonStr);
+      setStatus("error");
+      alert("AI response not properly formatted.");
+      return;
+    }
+
+    // 🔥 SAFE DATA MAPPING (prevents undefined crashes)
     const withIds: ResumeData = {
       full_name: parsed.full_name ?? "",
       email: parsed.email ?? "",
@@ -364,23 +380,42 @@ async function generateCVWithAI(
       github: parsed.github ?? "",
       portfolio: parsed.portfolio ?? "",
       summary: parsed.summary ?? "",
-      education: (parsed.education ?? []).map((e) => ({ ...e, id: uid() })),
-      experience: (parsed.experience ?? []).map((e) => ({ ...e, id: uid() })),
-      projects: (parsed.projects ?? []).map((e) => ({ ...e, id: uid() })),
-      skills: (parsed.skills ?? []).map((e) => ({ ...e, id: uid() })),
-      certifications: (parsed.certifications ?? []).map((e) => ({
-        ...e,
-        id: uid(),
-      })),
-      references: (parsed.references ?? []).map((e) => ({ ...e, id: uid() })),
-      extras: (parsed.extras ?? []).map((e) => ({ ...e, id: uid() })),
+
+      education: Array.isArray(parsed.education)
+        ? parsed.education.map((e) => ({ ...e, id: uid() }))
+        : [],
+
+      experience: Array.isArray(parsed.experience)
+        ? parsed.experience.map((e) => ({ ...e, id: uid() }))
+        : [],
+
+      projects: Array.isArray(parsed.projects)
+        ? parsed.projects.map((e) => ({ ...e, id: uid() }))
+        : [],
+
+      skills: Array.isArray(parsed.skills)
+        ? parsed.skills.map((e) => ({ ...e, id: uid() }))
+        : [],
+
+      certifications: Array.isArray(parsed.certifications)
+        ? parsed.certifications.map((e) => ({ ...e, id: uid() }))
+        : [],
+
+      references: Array.isArray(parsed.references)
+        ? parsed.references.map((e) => ({ ...e, id: uid() }))
+        : [],
+
+      extras: Array.isArray(parsed.extras)
+        ? parsed.extras.map((e) => ({ ...e, id: uid() }))
+        : [],
     };
 
     setResume(withIds);
     setStatus("done");
   } catch (err) {
-    console.error("AI generate error:", err);
+    console.error("❌ AI generate error:", err);
     setStatus("error");
+    alert("AI failed. Please try again.");
   }
 }
 

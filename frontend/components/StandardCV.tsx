@@ -71,7 +71,7 @@ export interface ResumeData {
 interface Props {
   data: ResumeData;
   photo: string | null;
-  previewRef: React.RefObject<HTMLDivElement>;
+  previewRef: React.RefObject<HTMLDivElement | null>;
 }
 
 // ─── SUB-COMPONENTS ──────────────────────────────────────────────────────────

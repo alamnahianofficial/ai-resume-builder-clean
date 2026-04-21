@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useRef } from "react";
+import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Download,
@@ -22,6 +22,9 @@ import StandardCV, {
   RefEntry,
   ExtraEntry,
 } from "@/components/StandardCV";
+
+// ─── TYPES for docx children array ───────────────────────────────────────────
+type DocxChild = import("docx").Paragraph;
 
 // ─── BLANKS ──────────────────────────────────────────────────────────────────
 const uid = () => Date.now() + Math.random();
@@ -82,9 +85,10 @@ const initResume = (): ResumeData => ({
 });
 
 // ─── PDF HTML BUILDER ────────────────────────────────────────────────────────
-const F = "'Times New Roman', Times, serif";
+const FONT = "'Times New Roman', Times, serif";
 
 function buildPDFHtml(data: ResumeData, photo: string | null): string {
+  const F = FONT;
   const contacts = [data.email, data.phone, data.location]
     .filter(Boolean)
     .join("  |  ");
@@ -117,7 +121,6 @@ function buildPDFHtml(data: ResumeData, photo: string | null): string {
       : "";
   };
 
-  // Social links each on own line
   const socialLines = [
     data.linkedin &&
       `<div style="font-family:${F};font-size:9.5pt;margin-top:2px"><b>LinkedIn:</b> <span style="color:#1a56db">${data.linkedin}</span></div>`,
@@ -301,8 +304,33 @@ function buildPDFHtml(data: ResumeData, photo: string | null): string {
   </body></html>`;
 }
 
-// ─── AI CV BUILDER ───────────────────────────────────────────────────────────
-// Uses the Anthropic API (already available via claude.ai artifacts)
+// ─── AI CV GENERATOR ─────────────────────────────────────────────────────────
+interface AnthropicContent {
+  type: string;
+  text?: string;
+}
+interface AnthropicResponse {
+  content?: AnthropicContent[];
+}
+
+interface ParsedResume {
+  full_name?: string;
+  email?: string;
+  phone?: string;
+  location?: string;
+  linkedin?: string;
+  github?: string;
+  portfolio?: string;
+  summary?: string;
+  education?: Omit<EduEntry, "id">[];
+  experience?: Omit<ExpEntry, "id">[];
+  projects?: Omit<ProjectEntry, "id">[];
+  skills?: Omit<SkillEntry, "id">[];
+  certifications?: Omit<CertEntry, "id">[];
+  references?: Omit<RefEntry, "id">[];
+  extras?: Omit<ExtraEntry, "id">[];
+}
+
 async function generateCVWithAI(
   brief: string,
   setResume: (r: ResumeData) => void,
@@ -310,12 +338,21 @@ async function generateCVWithAI(
 ) {
   setStatus("Calling AI…");
   try {
-    const prompt = `You are an expert CV writer. Based on the following brief information about a person, generate a complete, professional, ATS-friendly CV data object.
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 2000,
+        messages: [
+          {
+            role: "user",
+            content: `You are an expert CV writer. Based on the following brief, generate a complete professional ATS-friendly CV as JSON.
 
 BRIEF:
 ${brief}
 
-Return ONLY a valid JSON object with this exact structure (no markdown, no extra text):
+Return ONLY valid JSON with this structure (no markdown, no extra text):
 {
   "full_name": "string",
   "email": "string",
@@ -325,126 +362,137 @@ Return ONLY a valid JSON object with this exact structure (no markdown, no extra
   "github": "string or empty",
   "portfolio": "string or empty",
   "summary": "3-4 sentence professional profile",
-  "education": [
-    { "institution": "string", "degree": "string", "cgpa": "string or empty", "duration": "string e.g. 2020 – 2024" }
-  ],
-  "experience": [
-    { "role": "string", "org": "string", "duration": "string", "bullets": "bullet1\nbullet2\nbullet3" }
-  ],
-  "projects": [
-    { "name": "string", "link": "string or empty", "duration": "string or empty", "bullets": "bullet1\nbullet2" }
-  ],
-  "skills": [
-    { "category": "category name", "skills": "skill1, skill2, skill3" }
-  ],
+  "education": [{ "institution": "string", "degree": "string", "cgpa": "string or empty", "duration": "string" }],
+  "experience": [{ "role": "string", "org": "string", "duration": "string", "bullets": "bullet1\\nbullet2\\nbullet3" }],
+  "projects": [{ "name": "string", "link": "string or empty", "duration": "string or empty", "bullets": "bullet1\\nbullet2" }],
+  "skills": [{ "category": "string", "skills": "skill1, skill2, skill3" }],
   "certifications": [],
   "references": [],
   "extras": []
 }
-
-Rules:
-- Write 3-5 strong, quantified bullet points per experience entry
-- Bullets must start with action verbs
-- Keep summary professional and concise
-- If info is missing, make reasonable professional assumptions
-- Return ONLY the JSON, nothing else`;
-
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 2000,
-        messages: [{ role: "user", content: prompt }],
+Rules: 3-5 quantified bullet points per experience, action verbs, return ONLY JSON.`,
+          },
+        ],
       }),
     });
 
     setStatus("Parsing response…");
-    const d = await res.json();
-    const raw =
-      d.content?.find((c: any) => c.type === "text")?.text?.trim() ?? "";
-
-    // strip possible markdown fences
+    const d = (await res.json()) as AnthropicResponse;
+    const raw = d.content?.find((c) => c.type === "text")?.text?.trim() ?? "";
     const jsonStr = raw
       .replace(/^```json\s*/i, "")
       .replace(/^```\s*/i, "")
       .replace(/```\s*$/i, "")
       .trim();
-    const parsed = JSON.parse(jsonStr);
+    const parsed = JSON.parse(jsonStr) as ParsedResume;
 
-    // Inject IDs
-    const withIds = {
-      ...parsed,
-      education: (parsed.education || []).map((e: any) => ({
+    const withIds: ResumeData = {
+      full_name: parsed.full_name ?? "",
+      email: parsed.email ?? "",
+      phone: parsed.phone ?? "",
+      location: parsed.location ?? "",
+      linkedin: parsed.linkedin ?? "",
+      github: parsed.github ?? "",
+      portfolio: parsed.portfolio ?? "",
+      summary: parsed.summary ?? "",
+      education: (parsed.education ?? []).map((e) => ({ ...e, id: uid() })),
+      experience: (parsed.experience ?? []).map((e) => ({ ...e, id: uid() })),
+      projects: (parsed.projects ?? []).map((e) => ({ ...e, id: uid() })),
+      skills: (parsed.skills ?? []).map((e) => ({ ...e, id: uid() })),
+      certifications: (parsed.certifications ?? []).map((e) => ({
         ...e,
         id: uid(),
       })),
-      experience: (parsed.experience || []).map((e: any) => ({
-        ...e,
-        id: uid(),
-      })),
-      projects: (parsed.projects || []).map((e: any) => ({ ...e, id: uid() })),
-      skills: (parsed.skills || []).map((e: any) => ({ ...e, id: uid() })),
-      certifications: (parsed.certifications || []).map((e: any) => ({
-        ...e,
-        id: uid(),
-      })),
-      references: (parsed.references || []).map((e: any) => ({
-        ...e,
-        id: uid(),
-      })),
-      extras: (parsed.extras || []).map((e: any) => ({ ...e, id: uid() })),
+      references: (parsed.references ?? []).map((e) => ({ ...e, id: uid() })),
+      extras: (parsed.extras ?? []).map((e) => ({ ...e, id: uid() })),
     };
 
-    setResume(withIds as ResumeData);
+    setResume(withIds);
     setStatus("done");
-  } catch (e) {
-    console.error("AI generate error:", e);
+  } catch (err) {
+    console.error("AI generate error:", err);
     setStatus("error");
   }
 }
 
-// ─── COMPONENT ───────────────────────────────────────────────────────────────
+// ─── SECTION HEADER (declared outside component to fix static-components lint) ──
+interface SecHeaderProps {
+  id: string;
+  label: string;
+  num: string;
+  collapsed: Record<string, boolean>;
+  onToggle: (id: string) => void;
+}
 
+function SecHeader({ id, label, num, collapsed, onToggle }: SecHeaderProps) {
+  return (
+    <button
+      onClick={() => onToggle(id)}
+      className="w-full flex justify-between items-center mb-3"
+      style={{
+        background: "none",
+        border: "none",
+        cursor: "pointer",
+        padding: 0,
+      }}
+    >
+      <div className="sec-label mb-0">
+        {num} · {label}
+      </div>
+      {collapsed[id] ? (
+        <ChevronDown size={14} color="#475569" />
+      ) : (
+        <ChevronUp size={14} color="#475569" />
+      )}
+    </button>
+  );
+}
+
+// ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
 export default function Builder() {
-  const [mounted, setMounted] = useState(false);
   const [exportingPDF, setExportingPDF] = useState(false);
   const [exportingDOCX, setExportingDOCX] = useState(false);
   const [aiLoading, setAiLoading] = useState<string | null>(null);
-  const [aiGenStatus, setAiGenStatus] = useState<string>("");
+  const [aiGenStatus, setAiGenStatus] = useState("");
   const [showAIModal, setShowAIModal] = useState(false);
   const [aiBrief, setAiBrief] = useState("");
   const [photo, setPhoto] = useState<string | null>(null);
   const [resume, setResume] = useState<ResumeData>(initResume);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
-  const previewRef = useRef<HTMLDivElement>(null);
+  // use null-safe ref — fix TS2322 by typing as RefObject<HTMLDivElement | null>
+  const previewRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  // Removed useEffect setMounted — not needed, causes lint warning.
+  // "use client" ensures this only runs client-side.
 
   const toggleSection = (key: string) =>
     setCollapsed((p) => ({ ...p, [key]: !p[key] }));
 
-  // ─── UPDATERS ──────────────────────────────────────────────────────────
+  // ─── FIELD UPDATER ─────────────────────────────────────────────────────
   const setField = (f: keyof ResumeData, v: string) =>
     setResume((p) => ({ ...p, [f]: v }));
 
+  // Generic typed updater — fixes TS2352 by using unknown cast path
   function makeU<T extends { id: number }>(
     key: keyof ResumeData,
     blank: () => T,
   ) {
     const add = () =>
-      setResume((p) => ({ ...p, [key]: [...(p[key] as T[]), blank()] }));
+      setResume((p) => ({
+        ...p,
+        [key]: [...(p[key] as unknown as T[]), blank()],
+      }));
     const remove = (id: number) =>
       setResume((p) => ({
         ...p,
-        [key]: (p[key] as T[]).filter((x) => x.id !== id),
+        [key]: (p[key] as unknown as T[]).filter((x) => x.id !== id),
       }));
     const upd = (id: number, f: keyof T, v: string) =>
       setResume((p) => ({
         ...p,
-        [key]: (p[key] as T[]).map((x) => (x.id === id ? { ...x, [f]: v } : x)),
+        [key]: (p[key] as unknown as T[]).map((x) =>
+          x.id === id ? { ...x, [f]: v } : x,
+        ),
       }));
     return { add, remove, upd };
   }
@@ -457,7 +505,7 @@ export default function Builder() {
   const ref_ = makeU<RefEntry>("references", blankRef);
   const extra = makeU<ExtraEntry>("extras", blankExtra);
 
-  // ─── AI IMPROVE (single field) ─────────────────────────────────────────
+  // ─── AI IMPROVE ────────────────────────────────────────────────────────
   const aiImprove = async (
     text: string,
     ctx: string,
@@ -476,18 +524,16 @@ export default function Builder() {
           messages: [
             {
               role: "user",
-              content: `You are an expert CV writer. Improve the following ${ctx} to be professional, concise, and ATS-friendly. Use action verbs. Keep bullet points (one per line). Return ONLY the improved text, no commentary.\n\nOriginal:\n${text}`,
+              content: `Improve the following ${ctx} to be professional, concise, and ATS-friendly. Use action verbs. Keep bullet points one per line. Return ONLY the improved text.\n\nOriginal:\n${text}`,
             },
           ],
         }),
       });
-      const d = await res.json();
-      const improved = d.content
-        ?.find((c: any) => c.type === "text")
-        ?.text?.trim();
+      const d = (await res.json()) as AnthropicResponse;
+      const improved = d.content?.find((c) => c.type === "text")?.text?.trim();
       if (improved) onResult(improved);
-    } catch (e) {
-      console.error("AI error:", e);
+    } catch (err) {
+      console.error("AI improve error:", err);
     }
     setAiLoading(null);
   };
@@ -513,9 +559,9 @@ export default function Builder() {
         Array.from(iDoc.images).map((img) =>
           img.complete
             ? Promise.resolve()
-            : new Promise((r) => {
-                img.onload = r;
-                img.onerror = r;
+            : new Promise<void>((r) => {
+                img.onload = () => r();
+                img.onerror = () => r();
               }),
         ),
       );
@@ -523,7 +569,7 @@ export default function Builder() {
 
       const root = iDoc.getElementById("cv-root") as HTMLElement;
       const totalH = root.scrollHeight;
-      iframe.style.height = totalH + "px";
+      iframe.style.height = `${totalH}px`;
       await new Promise((r) => setTimeout(r, 120));
 
       const canvas = await html2canvas(root, {
@@ -549,6 +595,7 @@ export default function Builder() {
       const pxPerMm = canvas.width / PW;
       const pageHpx = Math.round(PH * pxPerMm);
       const pages = Math.ceil(canvas.height / pageHpx);
+
       for (let p = 0; p < pages; p++) {
         if (p > 0) pdf.addPage();
         const slice = document.createElement("canvas");
@@ -561,9 +608,9 @@ export default function Builder() {
         pdf.addImage(slice.toDataURL("image/jpeg", 0.97), "JPEG", 0, 0, PW, PH);
       }
       pdf.save(`${resume.full_name || "Resume"}_CV.pdf`);
-    } catch (e) {
-      console.error("PDF error:", e);
-      alert("PDF failed — check console.");
+    } catch (err) {
+      console.error("PDF error:", err);
+      alert("PDF export failed — check console.");
     }
     setExportingPDF(false);
   };
@@ -580,12 +627,10 @@ export default function Builder() {
         AlignmentType,
         BorderStyle,
         ExternalHyperlink,
-        TabStopType,
-        TabStopLeader,
       } = await import("docx");
       const { saveAs } = await import("file-saver");
       const TN = "Times New Roman";
-      const ch: any[] = [];
+      const ch: DocxChild[] = [];
 
       const SH = (t: string) =>
         new Paragraph({
@@ -604,10 +649,16 @@ export default function Builder() {
         });
       const bd = (t: string) =>
         new TextRun({ text: t, bold: true, size: 20, font: TN });
-      const tx = (t: string, opts: any = {}) =>
-        new TextRun({ text: t, size: 20, font: TN, ...opts });
+      const tx = (t: string, color?: string, italics?: boolean) =>
+        new TextRun({
+          text: t,
+          size: 20,
+          font: TN,
+          ...(color ? { color } : {}),
+          ...(italics ? { italics } : {}),
+        });
 
-      // Header
+      // Name
       ch.push(
         new Paragraph({
           alignment: AlignmentType.CENTER,
@@ -631,7 +682,7 @@ export default function Builder() {
           new Paragraph({
             alignment: AlignmentType.CENTER,
             spacing: { after: 40 },
-            children: [tx(cl, { color: "444444" })],
+            children: [tx(cl, "444444")],
           }),
         );
       if (resume.linkedin)
@@ -639,10 +690,7 @@ export default function Builder() {
           new Paragraph({
             alignment: AlignmentType.CENTER,
             spacing: { after: 20 },
-            children: [
-              bd("LinkedIn: "),
-              tx(resume.linkedin, { color: "1a56db" }),
-            ],
+            children: [bd("LinkedIn: "), tx(resume.linkedin, "1a56db")],
           }),
         );
       if (resume.github)
@@ -650,7 +698,7 @@ export default function Builder() {
           new Paragraph({
             alignment: AlignmentType.CENTER,
             spacing: { after: 20 },
-            children: [bd("GitHub: "), tx(resume.github, { color: "1a56db" })],
+            children: [bd("GitHub: "), tx(resume.github, "1a56db")],
           }),
         );
       if (resume.portfolio)
@@ -658,14 +706,10 @@ export default function Builder() {
           new Paragraph({
             alignment: AlignmentType.CENTER,
             spacing: { after: 160 },
-            children: [
-              bd("Portfolio: "),
-              tx(resume.portfolio, { color: "1a56db" }),
-            ],
+            children: [bd("Portfolio: "), tx(resume.portfolio, "1a56db")],
           }),
         );
 
-      // Summary
       if (resume.summary) {
         ch.push(SH("Professional Profile"));
         ch.push(
@@ -676,7 +720,6 @@ export default function Builder() {
         );
       }
 
-      // Education
       const eduR = resume.education.filter((e) => e.institution || e.degree);
       if (eduR.length) {
         ch.push(SH("Education"));
@@ -686,7 +729,9 @@ export default function Builder() {
               spacing: { before: 80, after: 0 },
               children: [
                 bd(e.institution),
-                ...(e.duration ? [tx("\t" + e.duration, { bold: true })] : []),
+                ...(e.duration
+                  ? [tx(`\t${e.duration}`, undefined, false)]
+                  : []),
               ],
             }),
           );
@@ -695,15 +740,14 @@ export default function Builder() {
               new Paragraph({
                 spacing: { after: 40 },
                 children: [
-                  tx(e.degree, { italics: true }),
-                  ...(e.cgpa ? [tx("\tCGPA: ", {}), bd(e.cgpa)] : []),
+                  tx(e.degree, undefined, true),
+                  ...(e.cgpa ? [tx(`\tCGPA: `), bd(e.cgpa)] : []),
                 ],
               }),
             );
         }
       }
 
-      // Experience
       const expR = resume.experience.filter((e) => e.role || e.org);
       if (expR.length) {
         ch.push(SH("Work Experience"));
@@ -713,7 +757,16 @@ export default function Builder() {
               spacing: { before: 80, after: 0 },
               children: [
                 bd(e.role),
-                ...(e.duration ? [tx("\t" + e.duration, { bold: true })] : []),
+                ...(e.duration
+                  ? [
+                      new TextRun({
+                        text: `\t${e.duration}`,
+                        bold: true,
+                        size: 20,
+                        font: TN,
+                      }),
+                    ]
+                  : []),
               ],
             }),
           );
@@ -732,7 +785,6 @@ export default function Builder() {
         }
       }
 
-      // Projects
       const prR = resume.projects.filter((p) => p.name);
       if (prR.length) {
         ch.push(SH("Projects / Thesis"));
@@ -742,7 +794,16 @@ export default function Builder() {
               spacing: { before: 80, after: 0 },
               children: [
                 bd(p.name),
-                ...(p.duration ? [tx("\t" + p.duration, { bold: true })] : []),
+                ...(p.duration
+                  ? [
+                      new TextRun({
+                        text: `\t${p.duration}`,
+                        bold: true,
+                        size: 20,
+                        font: TN,
+                      }),
+                    ]
+                  : []),
               ],
             }),
           );
@@ -754,7 +815,15 @@ export default function Builder() {
                   tx("Link: "),
                   new ExternalHyperlink({
                     link: p.link,
-                    children: [tx(p.link, { color: "1a56db", underline: {} })],
+                    children: [
+                      new TextRun({
+                        text: p.link,
+                        size: 19,
+                        font: TN,
+                        color: "1a56db",
+                        underline: {},
+                      }),
+                    ],
                   }),
                 ],
               }),
@@ -770,7 +839,6 @@ export default function Builder() {
         }
       }
 
-      // Skills
       const skR = resume.skills.filter((s) => s.skills);
       if (skR.length) {
         ch.push(SH("Skills"));
@@ -779,14 +847,13 @@ export default function Builder() {
             new Paragraph({
               spacing: { after: 30 },
               children: [
-                ...(s.category ? [bd(s.category + ": ")] : []),
+                ...(s.category ? [bd(`${s.category}: `)] : []),
                 tx(s.skills),
               ],
             }),
           );
       }
 
-      // Certifications
       const ceR = resume.certifications.filter((c) => c.name);
       if (ceR.length) {
         ch.push(SH("Certifications"));
@@ -796,14 +863,22 @@ export default function Builder() {
               spacing: { after: 30 },
               children: [
                 bd(c.name),
-                ...(c.issuer ? [tx(` — ${c.issuer}`, { italics: true })] : []),
-                ...(c.date ? [tx("\t" + c.date, { bold: true })] : []),
+                ...(c.issuer ? [tx(` — ${c.issuer}`, undefined, true)] : []),
+                ...(c.date
+                  ? [
+                      new TextRun({
+                        text: `\t${c.date}`,
+                        bold: true,
+                        size: 20,
+                        font: TN,
+                      }),
+                    ]
+                  : []),
               ],
             }),
           );
       }
 
-      // References
       const rfR = resume.references.filter((r) => r.name);
       if (rfR.length) {
         ch.push(SH("References"));
@@ -818,7 +893,7 @@ export default function Builder() {
             ch.push(
               new Paragraph({
                 spacing: { after: 0 },
-                children: [tx(r.title, { italics: true })],
+                children: [tx(r.title, undefined, true)],
               }),
             );
           if (r.org)
@@ -829,20 +904,19 @@ export default function Builder() {
             ch.push(
               new Paragraph({
                 spacing: { after: 0 },
-                children: [tx("Phone: " + r.phone)],
+                children: [tx(`Phone: ${r.phone}`)],
               }),
             );
           if (r.email)
             ch.push(
               new Paragraph({
                 spacing: { after: 60 },
-                children: [tx("Email: " + r.email, { color: "1a56db" })],
+                children: [tx(`Email: ${r.email}`, "1a56db")],
               }),
             );
         }
       }
 
-      // Extras
       const exR = resume.extras.filter((e) => e.label && e.value);
       if (exR.length) {
         ch.push(SH("Additional Information"));
@@ -850,7 +924,7 @@ export default function Builder() {
           ch.push(
             new Paragraph({
               spacing: { after: 30 },
-              children: [bd(e.label + ": "), tx(e.value)],
+              children: [bd(`${e.label}: `), tx(e.value)],
             }),
           );
       }
@@ -860,48 +934,16 @@ export default function Builder() {
         await Packer.toBlob(doc),
         `${resume.full_name || "Resume"}_CV.docx`,
       );
-    } catch (e) {
-      console.error("DOCX error:", e);
-      alert("DOCX failed — check console.");
+    } catch (err) {
+      console.error("DOCX error:", err);
+      alert("DOCX export failed — check console.");
     }
     setExportingDOCX(false);
   };
 
-  if (!mounted) return null;
   const isExporting = exportingPDF || exportingDOCX;
   const isAiGen =
     aiGenStatus === "Calling AI…" || aiGenStatus === "Parsing response…";
-
-  // ─── SECTION COLLAPSE HEADER ───────────────────────────────────────────
-  const SecHeader = ({
-    id,
-    label,
-    num,
-  }: {
-    id: string;
-    label: string;
-    num: string;
-  }) => (
-    <button
-      onClick={() => toggleSection(id)}
-      className="w-full flex justify-between items-center mb-3"
-      style={{
-        background: "none",
-        border: "none",
-        cursor: "pointer",
-        padding: 0,
-      }}
-    >
-      <div className="sec-label mb-0">
-        {num} · {label}
-      </div>
-      {collapsed[id] ? (
-        <ChevronDown size={14} color="#475569" />
-      ) : (
-        <ChevronUp size={14} color="#475569" />
-      )}
-    </button>
-  );
 
   return (
     <>
@@ -942,14 +984,14 @@ export default function Builder() {
         .link-row input { flex:1; background:transparent; border:none; outline:none;
                           color:#93c5fd; font-size:12px; font-family:inherit; }
         .link-row input::placeholder { color:#334155; }
-        .ai-modal-backdrop { position:fixed; inset:0; background:rgba(0,0,0,.75); z-index:60;
-                             display:flex; align-items:center; justify-content:center; padding:16px; }
+        .ai-modal-bg { position:fixed; inset:0; background:rgba(0,0,0,.75); z-index:60;
+                       display:flex; align-items:center; justify-content:center; padding:16px; }
         .ai-modal { background:#0f172a; border:1px solid rgba(59,130,246,.3); border-radius:24px;
                     padding:32px; width:100%; max-width:560px; }
       `}</style>
 
       <div className="flex flex-col lg:flex-row min-h-screen bg-[#030712] text-slate-200">
-        {/* ── EXPORT OVERLAY ── */}
+        {/* OVERLAY */}
         <AnimatePresence>
           {(isExporting || isAiGen) && (
             <motion.div
@@ -976,20 +1018,16 @@ export default function Builder() {
           )}
         </AnimatePresence>
 
-        {/* ── AI GENERATE MODAL ── */}
+        {/* AI MODAL */}
         <AnimatePresence>
           {showAIModal && (
             <motion.div
-              className="ai-modal-backdrop"
+              className="ai-modal-bg"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={(e) => {
-                if (
-                  (e.target as HTMLElement).classList.contains(
-                    "ai-modal-backdrop",
-                  )
-                )
+                if ((e.target as HTMLElement).classList.contains("ai-modal-bg"))
                   setShowAIModal(false);
               }}
             >
@@ -1011,20 +1049,19 @@ export default function Builder() {
                     </p>
                   </div>
                 </div>
-
                 <p className="text-slate-400 text-sm mb-3 leading-relaxed">
-                  Tell the AI about yourself: your name, education, work
-                  history, skills, and anything else. It will generate a
-                  complete, professional CV instantly.
+                  Tell the AI your name, education, work history, skills, etc.
+                  It generates a complete professional CV instantly.
                 </p>
-
                 <textarea
-                  className="di min-h-[180px] text-sm mb-4"
-                  placeholder={`Example:\nMy name is Shafinur Rahman. I have a BBA in Marketing from BRAC University (2025). I worked at Kreative Strategies as a Senior Account Executive (2026), Shohoz as a Marketing Intern (2025), and Interspeed Advertising (2024). My skills include Canva, content creation, social media marketing, and strategic planning. I speak Bangla and English.`}
+                  className="di min-h-20 text-sm mb-4"
+                  style={{ minHeight: 180 }}
+                  placeholder={
+                    "Example:\nMy name is Shafinur. I have a BBA in Marketing from BRAC University (2025). I worked at Kreative Strategies as a Senior Account Executive (2026) and Shohoz as a Marketing Intern (2025). Skills: Canva, social media marketing, strategic planning."
+                  }
                   value={aiBrief}
                   onChange={(e) => setAiBrief(e.target.value)}
                 />
-
                 <div className="flex gap-3">
                   <button
                     onClick={() => setShowAIModal(false)}
@@ -1048,10 +1085,9 @@ export default function Builder() {
                     <Sparkles size={15} /> Generate My CV
                   </button>
                 </div>
-
                 {aiGenStatus === "error" && (
                   <p className="text-red-400 text-xs mt-3 text-center">
-                    Something went wrong. Please try again.
+                    Something went wrong. Try again.
                   </p>
                 )}
               </motion.div>
@@ -1061,13 +1097,11 @@ export default function Builder() {
 
         {/* ══ LEFT EDITOR ══════════════════════════════════════════════════════ */}
         <div className="w-full lg:w-1/2 p-5 lg:p-9 overflow-y-auto max-h-screen scrollbar-hide border-r border-white/5">
-          {/* Top bar */}
           <header className="flex justify-between items-center mb-6">
             <h1 className="text-3xl font-black text-blue-500 italic tracking-tighter">
               CV DADA
             </h1>
             <div className="flex gap-2 flex-wrap justify-end">
-              {/* AI Generate button */}
               <button
                 onClick={() => {
                   setAiGenStatus("");
@@ -1113,14 +1147,13 @@ export default function Builder() {
             </div>
           </header>
 
-          {/* AI tip banner */}
+          {/* AI tip */}
           <div className="mb-5 p-3 rounded-2xl bg-indigo-500/8 border border-indigo-500/20 flex items-center gap-3">
-            <Sparkles size={16} color="#a5b4fc" className="flex-shrink-0" />
+            <Sparkles size={16} color="#a5b4fc" className="shrink-0" />
             <p className="text-slate-400 text-xs leading-relaxed">
               <span className="text-indigo-400 font-bold">New:</span> Click{" "}
-              <span className="text-white font-bold">AI Build</span> to describe
-              yourself and let AI write your entire CV automatically — free,
-              instant, no account needed.
+              <span className="text-white font-bold">AI Build</span> — describe
+              yourself and AI writes your entire CV free.
             </p>
           </div>
 
@@ -1141,9 +1174,10 @@ export default function Builder() {
                 }}
               >
                 {photo ? (
+                  /* eslint-disable-next-line @next/next/no-img-element */
                   <img
                     src={photo}
-                    alt=""
+                    alt="Profile preview"
                     style={{
                       width: "100%",
                       height: "100%",
@@ -1187,9 +1221,15 @@ export default function Builder() {
             </div>
           </div>
 
-          {/* 1. PERSONAL INFO */}
+          {/* 1. PERSONAL */}
           <div className="sec-box">
-            <SecHeader id="personal" label="Personal Information" num="1" />
+            <SecHeader
+              id="personal"
+              label="Personal Information"
+              num="1"
+              collapsed={collapsed}
+              onToggle={toggleSection}
+            />
             {!collapsed["personal"] && (
               <>
                 <div className="grid grid-cols-2 gap-2 mb-2">
@@ -1245,10 +1285,16 @@ export default function Builder() {
 
           {/* 2. SUMMARY */}
           <div className="sec-box">
-            <div className="flex justify-between items-center mb-3">
-              <SecHeader id="summary" label="Professional Summary" num="2" />
+            <div className="flex items-center justify-between">
+              <SecHeader
+                id="summary"
+                label="Professional Summary"
+                num="2"
+                collapsed={collapsed}
+                onToggle={toggleSection}
+              />
               <button
-                className="aibtn ml-2 flex-shrink-0"
+                className="aibtn mb-3 ml-2 shrink-0"
                 disabled={!!aiLoading}
                 onClick={() =>
                   aiImprove(
@@ -1269,7 +1315,7 @@ export default function Builder() {
             </div>
             {!collapsed["summary"] && (
               <textarea
-                className="di min-h-[80px] text-xs"
+                className="di min-h-20 text-xs"
                 placeholder="Write a 2–4 sentence professional profile…"
                 value={resume.summary}
                 onChange={(e) => setField("summary", e.target.value)}
@@ -1279,7 +1325,13 @@ export default function Builder() {
 
           {/* 3. EDUCATION */}
           <div className="sec-box">
-            <SecHeader id="edu" label="Education" num="3" />
+            <SecHeader
+              id="edu"
+              label="Education"
+              num="3"
+              collapsed={collapsed}
+              onToggle={toggleSection}
+            />
             {!collapsed["edu"] && (
               <>
                 {resume.education.map((e, idx) => (
@@ -1298,7 +1350,7 @@ export default function Builder() {
                         </button>
                       )}
                     </div>
-                    <div className="grid grid-cols-2 gap-2 mb-0">
+                    <div className="grid grid-cols-2 gap-2">
                       <input
                         className="di text-xs col-span-2"
                         placeholder="University / Institution"
@@ -1343,7 +1395,13 @@ export default function Builder() {
 
           {/* 4. EXPERIENCE */}
           <div className="sec-box">
-            <SecHeader id="exp" label="Work Experience" num="4" />
+            <SecHeader
+              id="exp"
+              label="Work Experience"
+              num="4"
+              collapsed={collapsed}
+              onToggle={toggleSection}
+            />
             {!collapsed["exp"] && (
               <>
                 {resume.experience.map((e, idx) => (
@@ -1411,8 +1469,8 @@ export default function Builder() {
                       </button>
                     </div>
                     <textarea
-                      className="di min-h-[80px] text-xs font-mono"
-                      placeholder="Led team of 5 engineers to deliver…&#10;Reduced load time by 40% through…&#10;Managed client accounts worth…"
+                      className="di min-h-20 text-xs font-mono"
+                      placeholder="Led team of 5 to deliver…&#10;Reduced load time by 40%…"
                       value={e.bullets}
                       onChange={(ev) =>
                         exp.upd(e.id, "bullets", ev.target.value)
@@ -1429,7 +1487,13 @@ export default function Builder() {
 
           {/* 5. PROJECTS */}
           <div className="sec-box">
-            <SecHeader id="proj" label="Projects / Thesis" num="5" />
+            <SecHeader
+              id="proj"
+              label="Projects / Thesis"
+              num="5"
+              collapsed={collapsed}
+              onToggle={toggleSection}
+            />
             {!collapsed["proj"] && (
               <>
                 {resume.projects.map((p, idx) => (
@@ -1490,7 +1554,7 @@ export default function Builder() {
                     </div>
                     <div className="flex justify-between items-center mb-1">
                       <span className="text-[9px] text-slate-600 font-bold uppercase tracking-widest">
-                        Description (one bullet per line)
+                        Description (one per line)
                       </span>
                       <button
                         className="aibtn"
@@ -1513,7 +1577,8 @@ export default function Builder() {
                       </button>
                     </div>
                     <textarea
-                      className="di min-h-[70px] text-xs font-mono"
+                      className="di text-xs font-mono"
+                      style={{ minHeight: 70 }}
                       placeholder="Built REST API with…&#10;Achieved 95% test coverage…"
                       value={p.bullets}
                       onChange={(ev) =>
@@ -1531,7 +1596,13 @@ export default function Builder() {
 
           {/* 6. SKILLS */}
           <div className="sec-box">
-            <SecHeader id="skills" label="Skills" num="6" />
+            <SecHeader
+              id="skills"
+              label="Skills"
+              num="6"
+              collapsed={collapsed}
+              onToggle={toggleSection}
+            />
             {!collapsed["skills"] && (
               <>
                 <p className="text-[10px] text-slate-600 mb-2">
@@ -1575,7 +1646,13 @@ export default function Builder() {
 
           {/* 7. CERTIFICATIONS */}
           <div className="sec-box">
-            <SecHeader id="cert" label="Certifications" num="7" />
+            <SecHeader
+              id="cert"
+              label="Certifications"
+              num="7"
+              collapsed={collapsed}
+              onToggle={toggleSection}
+            />
             {!collapsed["cert"] && (
               <>
                 {resume.certifications.map((c, idx) => (
@@ -1622,7 +1699,13 @@ export default function Builder() {
 
           {/* 8. REFERENCES */}
           <div className="sec-box">
-            <SecHeader id="refs" label="References" num="8" />
+            <SecHeader
+              id="refs"
+              label="References"
+              num="8"
+              collapsed={collapsed}
+              onToggle={toggleSection}
+            />
             {!collapsed["refs"] && (
               <>
                 {resume.references.map((r, idx) => (
@@ -1641,7 +1724,7 @@ export default function Builder() {
                         </button>
                       )}
                     </div>
-                    <div className="grid grid-cols-2 gap-2 mb-0">
+                    <div className="grid grid-cols-2 gap-2">
                       <input
                         className="di text-xs col-span-2"
                         placeholder="Full Name"
@@ -1690,7 +1773,13 @@ export default function Builder() {
 
           {/* 9. ADDITIONAL */}
           <div className="sec-box pb-6">
-            <SecHeader id="extra" label="Additional Info" num="9" />
+            <SecHeader
+              id="extra"
+              label="Additional Info"
+              num="9"
+              collapsed={collapsed}
+              onToggle={toggleSection}
+            />
             {!collapsed["extra"] && (
               <>
                 {resume.extras.map((e, idx) => (
@@ -1729,9 +1818,8 @@ export default function Builder() {
             )}
           </div>
         </div>
-        {/* end left */}
 
-        {/* ══ RIGHT PREVIEW ═══════════════════════════════════════════════════ */}
+        {/* ══ RIGHT PREVIEW ════════════════════════════════════════════════════ */}
         <div
           className="hidden lg:block w-full lg:w-1/2 bg-[#010413] overflow-y-auto scrollbar-hide"
           style={{ minHeight: "100vh" }}
@@ -1751,7 +1839,11 @@ export default function Builder() {
                 alignSelf: "flex-start",
               }}
             >
-              <StandardCV data={resume} photo={photo} previewRef={previewRef} />
+              <StandardCV
+                data={resume}
+                photo={photo}
+                previewRef={previewRef as React.RefObject<HTMLDivElement>}
+              />
             </div>
           </div>
         </div>

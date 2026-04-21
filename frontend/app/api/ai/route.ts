@@ -1,117 +1,81 @@
 import { NextRequest, NextResponse } from "next/server";
 
-// 🔒 simple rate limiter
 let lastCall = 0;
 
 export async function POST(req: NextRequest) {
   try {
-    // 🚫 Rate limit (3 sec)
     if (Date.now() - lastCall < 3000) {
       return NextResponse.json(
         { error: "Too fast. Please wait." },
-        { status: 429 }
+        { status: 429 },
       );
     }
     lastCall = Date.now();
 
-    const { prompt } = await req.json();
+    const body = await req.json();
+    const { prompt } = body;
 
-    // 🔑 check API key
+    if (!prompt?.trim()) {
+      return NextResponse.json(
+        { error: "No prompt provided" },
+        { status: 400 },
+      );
+    }
+
     if (!process.env.OPENROUTER_API_KEY) {
-      return NextResponse.json(
-        { error: "Missing API key in Vercel env" },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: "Missing API key" }, { status: 500 });
     }
 
-    const res = await fetch(
-      "https://openrouter.ai/api/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "mistralai/mistral-7b-instruct:free",
-          messages: [
-            {
-              role: "user",
-              content: `
-Return ONLY valid JSON.
-Do NOT include explanation or markdown.
+    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://cvdada.vercel.app",
+        "X-Title": "CV DADA",
+      },
+      body: JSON.stringify({
+        model: "meta-llama/llama-3.3-8b-instruct:free",
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 1000,
+        temperature: 0.7,
+      }),
+    });
 
-Format:
-{
-  "full_name": "",
-  "email": "",
-  "phone": "",
-  "location": "",
-  "summary": "",
-  "education": [],
-  "experience": [],
-  "projects": [],
-  "skills": [],
-  "certifications": [],
-  "references": [],
-  "extras": []
-}
+    const rawText = await res.text();
+    console.log("RAW OPENROUTER:", rawText.slice(0, 300));
 
-User input:
-${prompt}
-              `,
-            },
-          ],
-        }),
-      }
-    );
-
-    // 🔥 read raw text (important fix)
-    const textResponse = await res.text();
-
-    console.log("🧠 RAW OPENROUTER RESPONSE:", textResponse);
-
-    let data;
-
+    let data: any;
     try {
-      data = JSON.parse(textResponse);
-    } catch (err) {
-      console.error("❌ Not JSON response:", textResponse);
-
+      data = JSON.parse(rawText);
+    } catch {
+      console.error("Non-JSON from OpenRouter:", rawText.slice(0, 200));
       return NextResponse.json(
-        { error: "AI returned invalid (HTML/text) response" },
-        { status: 500 }
+        { error: "AI returned invalid response" },
+        { status: 500 },
       );
     }
 
-    // ❌ API error from OpenRouter
-    if (!res.ok) {
-      console.error("❌ OpenRouter error:", data);
-
+    if (!res.ok || data.error) {
+      console.error("OpenRouter error:", data.error);
       return NextResponse.json(
         { error: data?.error?.message || "AI request failed" },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
-    const text =
-      data?.choices?.[0]?.message?.content?.trim() || "";
+    const text = data?.choices?.[0]?.message?.content?.trim() ?? "";
 
     if (!text) {
-      return NextResponse.json(
-        { error: "Empty AI response" },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: "Empty AI response" }, { status: 500 });
     }
 
     return NextResponse.json({ text });
-
   } catch (err) {
-    console.error("❌ FINAL AI ERROR:", err);
-
+    console.error("AI route error:", err);
     return NextResponse.json(
       { error: "AI failed. Please try again." },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

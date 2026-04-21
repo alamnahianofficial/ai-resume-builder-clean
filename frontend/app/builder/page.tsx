@@ -304,7 +304,7 @@ function buildPDFHtml(data: ResumeData, photo: string | null): string {
   </body></html>`;
 }
 
-// ─── AI CV GENERATOR ─────────────────────────────────────────────────────────
+// ─── TYPES ───────────────────────────────────────────────────────────────────
 interface ParsedResume {
   full_name?: string;
   email?: string;
@@ -314,63 +314,55 @@ interface ParsedResume {
   github?: string;
   portfolio?: string;
   summary?: string;
-  education?: any[];
-  experience?: any[];
-  projects?: any[];
-  skills?: any[];
-  certifications?: any[];
-  references?: any[];
-  extras?: any[];
+  education?: Omit<EduEntry, "id">[];
+  experience?: Omit<ExpEntry, "id">[];
+  projects?: Omit<ProjectEntry, "id">[];
+  skills?: Omit<SkillEntry, "id">[];
+  certifications?: Omit<CertEntry, "id">[];
+  references?: Omit<RefEntry, "id">[];
+  extras?: Omit<ExtraEntry, "id">[];
 }
+
+// ─── AI CV GENERATOR ─────────────────────────────────────────────────────────
 async function generateCVWithAI(
   brief: string,
   setResume: (r: ResumeData) => void,
   setStatus: (s: string) => void,
 ) {
   setStatus("Calling AI…");
-
   try {
     const res = await fetch("/api/ai", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt: brief, max_tokens: 2000 }),
+      // ✅ FIX 1: was `{ prompt }` which sent undefined — must use `brief`
+      body: JSON.stringify({
+        prompt: `Return ONLY valid JSON, no markdown, no explanation.
+Schema: {"full_name":"","email":"","phone":"","location":"","linkedin":"","github":"","portfolio":"","summary":"","education":[{"institution":"","degree":"","cgpa":"","duration":""}],"experience":[{"role":"","org":"","duration":"","bullets":""}],"projects":[{"name":"","link":"","duration":"","bullets":""}],"skills":[{"category":"","skills":""}],"certifications":[{"name":"","issuer":"","date":""}],"references":[],"extras":[]}
+Fill using this info: ${brief.slice(0, 800)}`,
+      }),
     });
 
+    setStatus("Parsing response…");
     const d = (await res.json()) as { text?: string; error?: string };
 
+    // ✅ FIX 2: throw on API error so catch block handles it
     if (d.error) throw new Error(d.error);
 
     const raw = d.text?.trim() ?? "";
 
-    console.log("🧠 RAW AI OUTPUT:", raw);
+    // ✅ FIX 3: strip markdown fences if model wraps JSON in ```
+    const jsonStr = raw
+      .replace(/^```json\s*/i, "")
+      .replace(/^```\s*/i, "")
+      .replace(/```\s*$/i, "")
+      .trim();
 
-    setStatus("Parsing response…");
+    // ✅ FIX 4: extract first {...} block as fallback
+    const match = jsonStr.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error("No JSON object found in AI response");
 
-    // 🔥 STRONG JSON EXTRACTION (handles messy AI output)
-    let jsonStr = "";
+    const parsed = JSON.parse(match[0]) as ParsedResume;
 
-    const match = raw.match(/\{[\s\S]*\}/);
-    if (match) {
-      jsonStr = match[0];
-    } else {
-      console.error("❌ No JSON found in AI response");
-      setStatus("error");
-      alert("AI response invalid. Try again.");
-      return;
-    }
-
-    let parsed: ParsedResume = {};
-
-    try {
-      parsed = JSON.parse(jsonStr);
-    } catch (e) {
-      console.error("❌ JSON parse failed:", jsonStr);
-      setStatus("error");
-      alert("AI response not properly formatted.");
-      return;
-    }
-
-    // 🔥 SAFE DATA MAPPING (prevents undefined crashes)
     const withIds: ResumeData = {
       full_name: parsed.full_name ?? "",
       email: parsed.email ?? "",
@@ -380,46 +372,27 @@ async function generateCVWithAI(
       github: parsed.github ?? "",
       portfolio: parsed.portfolio ?? "",
       summary: parsed.summary ?? "",
-
-      education: Array.isArray(parsed.education)
-        ? parsed.education.map((e) => ({ ...e, id: uid() }))
-        : [],
-
-      experience: Array.isArray(parsed.experience)
-        ? parsed.experience.map((e) => ({ ...e, id: uid() }))
-        : [],
-
-      projects: Array.isArray(parsed.projects)
-        ? parsed.projects.map((e) => ({ ...e, id: uid() }))
-        : [],
-
-      skills: Array.isArray(parsed.skills)
-        ? parsed.skills.map((e) => ({ ...e, id: uid() }))
-        : [],
-
-      certifications: Array.isArray(parsed.certifications)
-        ? parsed.certifications.map((e) => ({ ...e, id: uid() }))
-        : [],
-
-      references: Array.isArray(parsed.references)
-        ? parsed.references.map((e) => ({ ...e, id: uid() }))
-        : [],
-
-      extras: Array.isArray(parsed.extras)
-        ? parsed.extras.map((e) => ({ ...e, id: uid() }))
-        : [],
+      education: (parsed.education ?? []).map((e) => ({ ...e, id: uid() })),
+      experience: (parsed.experience ?? []).map((e) => ({ ...e, id: uid() })),
+      projects: (parsed.projects ?? []).map((e) => ({ ...e, id: uid() })),
+      skills: (parsed.skills ?? []).map((e) => ({ ...e, id: uid() })),
+      certifications: (parsed.certifications ?? []).map((e) => ({
+        ...e,
+        id: uid(),
+      })),
+      references: (parsed.references ?? []).map((e) => ({ ...e, id: uid() })),
+      extras: (parsed.extras ?? []).map((e) => ({ ...e, id: uid() })),
     };
 
     setResume(withIds);
     setStatus("done");
   } catch (err) {
-    console.error("❌ AI generate error:", err);
+    console.error("AI generate error:", err);
     setStatus("error");
-    alert("AI failed. Please try again.");
   }
 }
 
-// ─── SECTION HEADER (declared outside component to fix static-components lint) ──
+// ─── SECTION HEADER ──────────────────────────────────────────────────────────
 interface SecHeaderProps {
   id: string;
   label: string;
@@ -463,20 +436,14 @@ export default function Builder() {
   const [photo, setPhoto] = useState<string | null>(null);
   const [resume, setResume] = useState<ResumeData>(initResume);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
-  // use null-safe ref — fix TS2322 by typing as RefObject<HTMLDivElement | null>
   const previewRef = useRef<HTMLDivElement | null>(null);
-
-  // Removed useEffect setMounted — not needed, causes lint warning.
-  // "use client" ensures this only runs client-side.
 
   const toggleSection = (key: string) =>
     setCollapsed((p) => ({ ...p, [key]: !p[key] }));
 
-  // ─── FIELD UPDATER ─────────────────────────────────────────────────────
   const setField = (f: keyof ResumeData, v: string) =>
     setResume((p) => ({ ...p, [f]: v }));
 
-  // Generic typed updater — fixes TS2352 by using unknown cast path
   function makeU<T extends { id: number }>(
     key: keyof ResumeData,
     blank: () => T,
@@ -523,11 +490,12 @@ export default function Builder() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          prompt: `Improve the following ${ctx} to be professional, concise, and ATS-friendly. Use action verbs. Keep bullet points one per line. Return ONLY the improved text.\n\nOriginal:\n${text}`,
-          max_tokens: 600,
+          prompt: `Improve the following ${ctx} to be professional, concise, and ATS-friendly. Use action verbs. Keep bullet points one per line. Return ONLY the improved text, no explanation.\n\nOriginal:\n${text}`,
         }),
       });
       const d = (await res.json()) as { text?: string; error?: string };
+      // ✅ FIX 5: handle error from API in aiImprove
+      if (d.error) throw new Error(d.error);
       if (d.text) onResult(d.text.trim());
     } catch (err) {
       console.error("AI improve error:", err);
@@ -655,7 +623,6 @@ export default function Builder() {
           ...(italics ? { italics } : {}),
         });
 
-      // Name
       ch.push(
         new Paragraph({
           alignment: AlignmentType.CENTER,
@@ -1144,7 +1111,6 @@ export default function Builder() {
             </div>
           </header>
 
-          {/* AI tip */}
           <div className="mb-3 p-2.5 rounded-xl bg-indigo-500/8 border border-indigo-500/20 flex items-center gap-3">
             <Sparkles size={16} color="#a5b4fc" className="shrink-0" />
             <p className="text-slate-400 text-xs leading-relaxed">
@@ -1154,7 +1120,6 @@ export default function Builder() {
             </p>
           </div>
 
-          {/* Credit */}
           <div className="mb-4 text-center text-[10px] text-slate-600 tracking-wider">
             Built by{" "}
             <span className="text-blue-500 font-bold">Nahian Alam</span> · CV
@@ -1178,7 +1143,7 @@ export default function Builder() {
                 }}
               >
                 {photo ? (
-                  /* eslint-disable-next-line @next/next/no-img-element */
+                  // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={photo}
                     alt="Profile preview"
@@ -1822,8 +1787,6 @@ export default function Builder() {
             )}
           </div>
         </div>
-
-        {/* ══ CREDIT FOOTER ═══════════════════════════════════════════════════ */}
 
         {/* ══ RIGHT PREVIEW ════════════════════════════════════════════════════ */}
         <div

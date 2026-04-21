@@ -31,3 +31,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "AI failed" }, { status: 500 });
   }
 }
+// simple protection
+let lastCall = 0;
+
+if (Date.now() - lastCall < 3000) {
+  return NextResponse.json({ error: "Too fast" }, { status: 429 });
+}
+
+lastCall = Date.now();

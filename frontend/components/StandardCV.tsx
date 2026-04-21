@@ -2,7 +2,7 @@ import React from "react";
 
 const F = "'Times New Roman', Times, serif";
 
-// ─── TYPES ────────────────────────────────────────────────────────────────────
+// ─── TYPES ───────────────────────────────────────────────────────────────────
 
 export interface EduEntry {
   id: number;
@@ -16,19 +16,19 @@ export interface ExpEntry {
   role: string;
   org: string;
   duration: string;
-  desc: string;
+  bullets: string; // newline-separated
 }
 export interface ProjectEntry {
   id: number;
   name: string;
   link: string;
   duration: string;
-  desc: string;
+  bullets: string;
 }
 export interface SkillEntry {
   id: number;
-  category: string;
-  skills: string;
+  category: string; // e.g. "Languages"
+  skills: string; // e.g. "Python, JS, Go"
 }
 export interface CertEntry {
   id: number;
@@ -36,11 +36,20 @@ export interface CertEntry {
   issuer: string;
   date: string;
 }
+export interface RefEntry {
+  id: number;
+  name: string;
+  title: string;
+  org: string;
+  phone: string;
+  email: string;
+}
 export interface ExtraEntry {
   id: number;
   label: string;
   value: string;
 }
+
 export interface ResumeData {
   full_name: string;
   email: string;
@@ -55,6 +64,7 @@ export interface ResumeData {
   projects: ProjectEntry[];
   skills: SkillEntry[];
   certifications: CertEntry[];
+  references: RefEntry[];
   extras: ExtraEntry[];
 }
 
@@ -64,7 +74,7 @@ interface Props {
   previewRef: React.RefObject<HTMLDivElement>;
 }
 
-// ─── SHARED SUB-COMPONENTS ────────────────────────────────────────────────────
+// ─── SUB-COMPONENTS ──────────────────────────────────────────────────────────
 
 function SectionTitle({ title }: { title: string }) {
   return (
@@ -73,7 +83,8 @@ function SectionTitle({ title }: { title: string }) {
         display: "flex",
         alignItems: "center",
         gap: "8px",
-        marginBottom: "7px",
+        marginBottom: "8px",
+        marginTop: 0,
       }}
     >
       <h2
@@ -136,7 +147,7 @@ function Bullets({ text }: { text: string }) {
           style={{
             fontFamily: F,
             fontSize: "10pt",
-            lineHeight: 1.55,
+            lineHeight: 1.6,
             color: "#000",
             marginBottom: "2px",
           }}
@@ -145,6 +156,41 @@ function Bullets({ text }: { text: string }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+// row helper: bold left, bold-date right
+function EntryRow({
+  left,
+  leftItalic = false,
+  right,
+}: {
+  left: string;
+  leftItalic?: boolean;
+  right?: string;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "baseline",
+        marginBottom: "1px",
+      }}
+    >
+      <span
+        style={{
+          fontFamily: F,
+          fontSize: "10.5pt",
+          fontWeight: leftItalic ? "normal" : "bold",
+          fontStyle: leftItalic ? "italic" : "normal",
+          color: "#000",
+        }}
+      >
+        {left}
+      </span>
+      {right && <BoldDate text={right} />}
+    </div>
   );
 }
 
@@ -163,6 +209,7 @@ export default function StandardCV({ data, photo, previewRef }: Props) {
   const hasProj = data.projects.some((p) => p.name);
   const hasSkill = data.skills.some((s) => s.skills);
   const hasCert = data.certifications.some((c) => c.name);
+  const hasRef = data.references.some((r) => r.name);
   const hasExtra = data.extras.some((e) => e.label && e.value);
 
   return (
@@ -179,7 +226,7 @@ export default function StandardCV({ data, photo, previewRef }: Props) {
         padding: "14mm 18mm 16mm 18mm",
       }}
     >
-      {/* ══ HEADER ════════════════════════════════════════════════════════════ */}
+      {/* ══ HEADER ══════════════════════════════════════════════════════════ */}
       <div
         style={{
           display: "flex",
@@ -212,6 +259,7 @@ export default function StandardCV({ data, photo, previewRef }: Props) {
             {data.full_name || "YOUR NAME"}
           </h1>
 
+          {/* Contact line */}
           {contacts.length > 0 && (
             <div
               style={{
@@ -225,29 +273,21 @@ export default function StandardCV({ data, photo, previewRef }: Props) {
             </div>
           )}
 
-          {socials.length > 0 && (
+          {/* Social links — each on its own line for clarity */}
+          {socials.map(({ label, url }) => (
             <div
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: "12px",
-                marginTop: "4px",
-                justifyContent: photo ? "flex-start" : "center",
-              }}
+              key={label}
+              style={{ fontFamily: F, fontSize: "9.5pt", marginTop: "2px" }}
             >
-              {socials.map(({ label, url }) => (
-                <span
-                  key={label}
-                  style={{ fontFamily: F, fontSize: "9.5pt", color: "#000" }}
-                >
-                  <span style={{ fontWeight: "bold" }}>{label}:</span>{" "}
-                  <span style={{ color: "#1a56db" }}>{url}</span>
-                </span>
-              ))}
+              <span style={{ fontWeight: "bold", color: "#000" }}>
+                {label}:
+              </span>{" "}
+              <span style={{ color: "#1a56db" }}>{url}</span>
             </div>
-          )}
+          ))}
         </div>
 
+        {/* Photo */}
         {photo && (
           <div
             style={{
@@ -275,7 +315,7 @@ export default function StandardCV({ data, photo, previewRef }: Props) {
         )}
       </div>
 
-      {/* ══ PROFESSIONAL PROFILE ════════════════════════════════════════════════ */}
+      {/* ══ PROFESSIONAL PROFILE ════════════════════════════════════════════ */}
       {data.summary && (
         <div style={{ marginBottom: "14px" }}>
           <SectionTitle title="Professional Profile" />
@@ -283,7 +323,7 @@ export default function StandardCV({ data, photo, previewRef }: Props) {
             style={{
               fontFamily: F,
               fontSize: "10.5pt",
-              lineHeight: 1.65,
+              lineHeight: 1.7,
               textAlign: "justify",
               margin: 0,
             }}
@@ -293,33 +333,17 @@ export default function StandardCV({ data, photo, previewRef }: Props) {
         </div>
       )}
 
-      {/* ══ EDUCATION ═══════════════════════════════════════════════════════════ */}
+      {/* ══ EDUCATION ═══════════════════════════════════════════════════════ */}
       {hasEdu && (
         <div style={{ marginBottom: "14px" }}>
           <SectionTitle title="Education" />
           {data.education
             .filter((e) => e.institution || e.degree)
             .map((edu, idx) => (
-              <div key={edu.id} style={{ marginTop: idx === 0 ? 0 : "10px" }}>
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "baseline",
-                  }}
-                >
-                  <span
-                    style={{
-                      fontFamily: F,
-                      fontSize: "10.5pt",
-                      fontWeight: "bold",
-                      color: "#000",
-                    }}
-                  >
-                    {edu.institution}
-                  </span>
-                  <BoldDate text={edu.duration} />
-                </div>
+              <div key={edu.id} style={{ marginTop: idx === 0 ? 0 : "9px" }}>
+                {/* Institution + year */}
+                <EntryRow left={edu.institution} right={edu.duration} />
+                {/* Degree + CGPA */}
                 <div
                   style={{
                     display: "flex",
@@ -331,8 +355,8 @@ export default function StandardCV({ data, photo, previewRef }: Props) {
                     style={{
                       fontFamily: F,
                       fontSize: "10pt",
-                      color: "#222",
                       fontStyle: "italic",
+                      color: "#222",
                     }}
                   >
                     {edu.degree}
@@ -351,7 +375,7 @@ export default function StandardCV({ data, photo, previewRef }: Props) {
         </div>
       )}
 
-      {/* ══ WORK EXPERIENCE ═════════════════════════════════════════════════════ */}
+      {/* ══ WORK EXPERIENCE ═════════════════════════════════════════════════ */}
       {hasExp && (
         <div style={{ marginBottom: "14px" }}>
           <SectionTitle title="Work Experience" />
@@ -359,25 +383,9 @@ export default function StandardCV({ data, photo, previewRef }: Props) {
             .filter((e) => e.role || e.org)
             .map((exp, idx) => (
               <div key={exp.id} style={{ marginTop: idx === 0 ? 0 : "10px" }}>
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "baseline",
-                  }}
-                >
-                  <span
-                    style={{
-                      fontFamily: F,
-                      fontSize: "10.5pt",
-                      fontWeight: "bold",
-                      color: "#000",
-                    }}
-                  >
-                    {exp.role}
-                  </span>
-                  <BoldDate text={exp.duration} />
-                </div>
+                {/* Role + duration */}
+                <EntryRow left={exp.role} right={exp.duration} />
+                {/* Company */}
                 {exp.org && (
                   <div
                     style={{
@@ -390,13 +398,13 @@ export default function StandardCV({ data, photo, previewRef }: Props) {
                     {exp.org}
                   </div>
                 )}
-                <Bullets text={exp.desc} />
+                <Bullets text={exp.bullets} />
               </div>
             ))}
         </div>
       )}
 
-      {/* ══ PROJECTS / THESIS ═══════════════════════════════════════════════════ */}
+      {/* ══ PROJECTS / THESIS ═══════════════════════════════════════════════ */}
       {hasProj && (
         <div style={{ marginBottom: "14px" }}>
           <SectionTitle title="Projects / Thesis" />
@@ -404,25 +412,7 @@ export default function StandardCV({ data, photo, previewRef }: Props) {
             .filter((p) => p.name)
             .map((proj, idx) => (
               <div key={proj.id} style={{ marginTop: idx === 0 ? 0 : "10px" }}>
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "baseline",
-                  }}
-                >
-                  <span
-                    style={{
-                      fontFamily: F,
-                      fontSize: "10.5pt",
-                      fontWeight: "bold",
-                      color: "#000",
-                    }}
-                  >
-                    {proj.name}
-                  </span>
-                  <BoldDate text={proj.duration} />
-                </div>
+                <EntryRow left={proj.name} right={proj.duration} />
                 {proj.link && (
                   <div
                     style={{
@@ -435,13 +425,13 @@ export default function StandardCV({ data, photo, previewRef }: Props) {
                     🔗 {proj.link}
                   </div>
                 )}
-                <Bullets text={proj.desc} />
+                <Bullets text={proj.bullets} />
               </div>
             ))}
         </div>
       )}
 
-      {/* ══ SKILLS ══════════════════════════════════════════════════════════════ */}
+      {/* ══ SKILLS ══════════════════════════════════════════════════════════ */}
       {hasSkill && (
         <div style={{ marginBottom: "14px" }}>
           <SectionTitle title="Skills" />
@@ -453,30 +443,31 @@ export default function StandardCV({ data, photo, previewRef }: Props) {
                 style={{
                   display: "flex",
                   gap: "6px",
-                  marginBottom: "3px",
+                  marginBottom: "4px",
                   fontFamily: F,
                   fontSize: "10pt",
                   color: "#000",
+                  lineHeight: 1.5,
                 }}
               >
-                {row.category && (
+                {row.category ? (
                   <span
                     style={{
                       fontWeight: "bold",
                       flexShrink: 0,
-                      minWidth: "120px",
+                      minWidth: "130px",
                     }}
                   >
                     {row.category}:
                   </span>
-                )}
+                ) : null}
                 <span>{row.skills}</span>
               </div>
             ))}
         </div>
       )}
 
-      {/* ══ CERTIFICATIONS ══════════════════════════════════════════════════════ */}
+      {/* ══ CERTIFICATIONS ══════════════════════════════════════════════════ */}
       {hasCert && (
         <div style={{ marginBottom: "14px" }}>
           <SectionTitle title="Certifications" />
@@ -495,14 +486,12 @@ export default function StandardCV({ data, photo, previewRef }: Props) {
                 <span
                   style={{ fontFamily: F, fontSize: "10pt", color: "#000" }}
                 >
-                  {cert.name}
-                  {cert.issuer ? (
-                    <span style={{ color: "#444", fontStyle: "italic" }}>
+                  <span style={{ fontWeight: "bold" }}>{cert.name}</span>
+                  {cert.issuer && (
+                    <span style={{ fontStyle: "italic", color: "#444" }}>
                       {" "}
                       — {cert.issuer}
                     </span>
-                  ) : (
-                    ""
                   )}
                 </span>
                 <BoldDate text={cert.date} />
@@ -511,7 +500,80 @@ export default function StandardCV({ data, photo, previewRef }: Props) {
         </div>
       )}
 
-      {/* ══ ADDITIONAL INFORMATION ══════════════════════════════════════════════ */}
+      {/* ══ REFERENCES ══════════════════════════════════════════════════════ */}
+      {hasRef && (
+        <div style={{ marginBottom: "14px" }}>
+          <SectionTitle title="References" />
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: "12px 24px",
+            }}
+          >
+            {data.references
+              .filter((r) => r.name)
+              .map((ref) => (
+                <div key={ref.id}>
+                  <div
+                    style={{
+                      fontFamily: F,
+                      fontSize: "10.5pt",
+                      fontWeight: "bold",
+                      color: "#000",
+                      marginBottom: "1px",
+                    }}
+                  >
+                    {ref.name}
+                  </div>
+                  {ref.title && (
+                    <div
+                      style={{
+                        fontFamily: F,
+                        fontSize: "10pt",
+                        fontStyle: "italic",
+                        color: "#333",
+                      }}
+                    >
+                      {ref.title}
+                    </div>
+                  )}
+                  {ref.org && (
+                    <div
+                      style={{ fontFamily: F, fontSize: "10pt", color: "#444" }}
+                    >
+                      {ref.org}
+                    </div>
+                  )}
+                  {ref.phone && (
+                    <div
+                      style={{
+                        fontFamily: F,
+                        fontSize: "9.5pt",
+                        color: "#444",
+                      }}
+                    >
+                      📞 {ref.phone}
+                    </div>
+                  )}
+                  {ref.email && (
+                    <div
+                      style={{
+                        fontFamily: F,
+                        fontSize: "9.5pt",
+                        color: "#1a56db",
+                      }}
+                    >
+                      ✉ {ref.email}
+                    </div>
+                  )}
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
+
+      {/* ══ ADDITIONAL INFORMATION ══════════════════════════════════════════ */}
       {hasExtra && (
         <div style={{ marginBottom: "14px" }}>
           <SectionTitle title="Additional Information" />
@@ -523,7 +585,7 @@ export default function StandardCV({ data, photo, previewRef }: Props) {
                 style={{
                   display: "flex",
                   gap: "6px",
-                  marginBottom: "3px",
+                  marginBottom: "4px",
                   fontFamily: F,
                   fontSize: "10pt",
                   color: "#000",

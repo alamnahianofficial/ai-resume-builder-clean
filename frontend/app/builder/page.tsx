@@ -338,47 +338,16 @@ async function generateCVWithAI(
 ) {
   setStatus("Calling AI…");
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
+    const res = await fetch("/api/ai", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 2000,
-        messages: [
-          {
-            role: "user",
-            content: `You are an expert CV writer. Based on the following brief, generate a complete professional ATS-friendly CV as JSON.
-
-BRIEF:
-${brief}
-
-Return ONLY valid JSON with this structure (no markdown, no extra text):
-{
-  "full_name": "string",
-  "email": "string",
-  "phone": "string",
-  "location": "string",
-  "linkedin": "string or empty",
-  "github": "string or empty",
-  "portfolio": "string or empty",
-  "summary": "3-4 sentence professional profile",
-  "education": [{ "institution": "string", "degree": "string", "cgpa": "string or empty", "duration": "string" }],
-  "experience": [{ "role": "string", "org": "string", "duration": "string", "bullets": "bullet1\\nbullet2\\nbullet3" }],
-  "projects": [{ "name": "string", "link": "string or empty", "duration": "string or empty", "bullets": "bullet1\\nbullet2" }],
-  "skills": [{ "category": "string", "skills": "skill1, skill2, skill3" }],
-  "certifications": [],
-  "references": [],
-  "extras": []
-}
-Rules: 3-5 quantified bullet points per experience, action verbs, return ONLY JSON.`,
-          },
-        ],
-      }),
+      body: JSON.stringify({ prompt, max_tokens: 2000 }),
     });
 
     setStatus("Parsing response…");
-    const d = (await res.json()) as AnthropicResponse;
-    const raw = d.content?.find((c) => c.type === "text")?.text?.trim() ?? "";
+    const d = (await res.json()) as { text?: string; error?: string };
+    if (d.error) throw new Error(d.error);
+    const raw = d.text?.trim() ?? "";
     const jsonStr = raw
       .replace(/^```json\s*/i, "")
       .replace(/^```\s*/i, "")
@@ -515,23 +484,16 @@ export default function Builder() {
     if (!text.trim()) return;
     setAiLoading(key);
     try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
+      const res = await fetch("/api/ai", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
+          prompt: `Improve the following ${ctx} to be professional, concise, and ATS-friendly. Use action verbs. Keep bullet points one per line. Return ONLY the improved text.\n\nOriginal:\n${text}`,
           max_tokens: 600,
-          messages: [
-            {
-              role: "user",
-              content: `Improve the following ${ctx} to be professional, concise, and ATS-friendly. Use action verbs. Keep bullet points one per line. Return ONLY the improved text.\n\nOriginal:\n${text}`,
-            },
-          ],
         }),
       });
-      const d = (await res.json()) as AnthropicResponse;
-      const improved = d.content?.find((c) => c.type === "text")?.text?.trim();
-      if (improved) onResult(improved);
+      const d = (await res.json()) as { text?: string; error?: string };
+      if (d.text) onResult(d.text.trim());
     } catch (err) {
       console.error("AI improve error:", err);
     }
@@ -949,7 +911,7 @@ export default function Builder() {
     <>
       <style>{`
         .di { width:100%; background:rgba(15,23,42,.6); border:1px solid rgba(100,116,139,.25);
-              border-radius:10px; padding:9px 13px; color:#e2e8f0; font-size:13px;
+              border-radius:8px; padding:7px 11px; color:#e2e8f0; font-size:13px;
               outline:none; transition:border-color .2s,box-shadow .2s; resize:none; font-family:inherit; }
         .di:focus { border-color:#3b82f6; box-shadow:0 0 0 3px rgba(59,130,246,.15); }
         .di::placeholder { color:#475569; }
@@ -965,7 +927,7 @@ export default function Builder() {
                  border:1px solid rgba(99,102,241,.25); transition:all .2s; }
         .aibtn:hover { background:rgba(99,102,241,.22); color:#c7d2fe; }
         .aibtn:disabled { opacity:.5; cursor:not-allowed; }
-        .add-btn { display:flex; align-items:center; gap:5px; margin-top:10px; padding:5px 12px;
+        .add-btn { display:flex; align-items:center; gap:4px; margin-top:8px; padding:4px 10px;
                    border-radius:8px; background:rgba(59,130,246,.07); border:1px dashed rgba(59,130,246,.3);
                    color:#60a5fa; font-size:11px; font-weight:600; cursor:pointer; transition:all .2s; width:fit-content; }
         .add-btn:hover { background:rgba(59,130,246,.14); border-color:#3b82f6; }
@@ -973,10 +935,10 @@ export default function Builder() {
                     width:26px; height:26px; border-radius:7px; border:none;
                     cursor:pointer; transition:all .15s; background:transparent; }
         .icon-btn:hover { background:rgba(239,68,68,.15); }
-        .sec-box { padding:18px 20px; background:rgba(15,23,42,.5); border:1px solid rgba(51,65,85,.7);
-                   border-radius:18px; margin-bottom:10px; }
-        .sec-label { font-size:9px; font-weight:900; letter-spacing:.18em; text-transform:uppercase; color:#475569; }
-        .entry-divider { border:none; border-top:1px solid rgba(51,65,85,.5); margin:12px 0; }
+        .sec-box { padding:12px 16px; background:rgba(15,23,42,.5); border:1px solid rgba(51,65,85,.7);
+                   border-radius:14px; margin-bottom:8px; }
+        .sec-label { font-size:8.5px; font-weight:900; letter-spacing:.18em; text-transform:uppercase; color:#475569; }
+        .entry-divider { border:none; border-top:1px solid rgba(51,65,85,.5); margin:8px 0; }
         .scrollbar-hide::-webkit-scrollbar { display:none; }
         .scrollbar-hide { -ms-overflow-style:none; scrollbar-width:none; }
         .link-row { display:flex; align-items:center; gap:8px; background:rgba(15,23,42,.6);
@@ -1096,8 +1058,8 @@ export default function Builder() {
         </AnimatePresence>
 
         {/* ══ LEFT EDITOR ══════════════════════════════════════════════════════ */}
-        <div className="w-full lg:w-1/2 p-5 lg:p-9 overflow-y-auto max-h-screen scrollbar-hide border-r border-white/5">
-          <header className="flex justify-between items-center mb-6">
+        <div className="w-full lg:w-1/2 p-4 lg:p-6 overflow-y-auto max-h-screen scrollbar-hide border-r border-white/5">
+          <header className="flex justify-between items-center mb-4">
             <h1 className="text-3xl font-black text-blue-500 italic tracking-tighter">
               CV DADA
             </h1>
@@ -1148,13 +1110,20 @@ export default function Builder() {
           </header>
 
           {/* AI tip */}
-          <div className="mb-5 p-3 rounded-2xl bg-indigo-500/8 border border-indigo-500/20 flex items-center gap-3">
+          <div className="mb-3 p-2.5 rounded-xl bg-indigo-500/8 border border-indigo-500/20 flex items-center gap-3">
             <Sparkles size={16} color="#a5b4fc" className="shrink-0" />
             <p className="text-slate-400 text-xs leading-relaxed">
               <span className="text-indigo-400 font-bold">New:</span> Click{" "}
               <span className="text-white font-bold">AI Build</span> — describe
               yourself and AI writes your entire CV free.
             </p>
+          </div>
+
+          {/* Credit */}
+          <div className="mb-4 text-center text-[10px] text-slate-600 tracking-wider">
+            Built by{" "}
+            <span className="text-blue-500 font-bold">Nahian Alam</span> · CV
+            DADA
           </div>
 
           {/* Photo */}
@@ -1818,6 +1787,8 @@ export default function Builder() {
             )}
           </div>
         </div>
+
+        {/* ══ CREDIT FOOTER ═══════════════════════════════════════════════════ */}
 
         {/* ══ RIGHT PREVIEW ════════════════════════════════════════════════════ */}
         <div

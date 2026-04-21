@@ -19,9 +19,27 @@ let data;
 try {
   data = JSON.parse(textResponse);
 } catch (e) {
-  console.error("❌ RAW HTML RESPONSE:", textResponse);
+  console.error("❌ RAW RESPONSE:", textResponse);
   return NextResponse.json(
-    { error: "AI failed (HTML response from API)" },
+    { error: "AI returned non-JSON (likely API key / model issue)" },
     { status: 500 },
   );
 }
+
+// 🔥 HANDLE ALL POSSIBLE RESPONSE FORMATS
+let text = "";
+
+if (Array.isArray(data)) {
+  text = data[0]?.generated_text || "";
+} else if (data.generated_text) {
+  text = data.generated_text;
+} else if (data.error) {
+  console.error("❌ HF ERROR:", data.error);
+  return NextResponse.json({ error: data.error }, { status: 500 });
+} else {
+  console.warn("⚠️ Unknown response shape:", data);
+  text = JSON.stringify(data);
+}
+
+// ✅ RETURN TO FRONTEND (VERY IMPORTANT)
+return NextResponse.json({ text });

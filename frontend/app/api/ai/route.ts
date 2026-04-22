@@ -4,20 +4,15 @@ export async function POST(req: NextRequest) {
   console.log("✅ API HIT");
 
   try {
-    const body = await req.json();
-    console.log("📥 BODY:", body);
+    const { prompt } = await req.json();
 
     return NextResponse.json({
-      status: "backend working",
-      received: body,
+      message: "Backend working",
+      prompt,
     });
 
   } catch (err) {
-    console.error("❌ ERROR:", err);
-
-    return NextResponse.json(
-      { error: "Backend crashed" },
-      { status: 500 }
-    );
+    console.error(err);
+    return NextResponse.json({ error: "fail" }, { status: 500 });
   }
 }

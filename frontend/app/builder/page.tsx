@@ -750,7 +750,7 @@ export default function Builder() {
                 <textarea
                   className="di min-h-20 text-sm mb-4"
                   style={{ minHeight: 180 }}
-                  placeholder={"Example:\nMy name is Shafinur. I have a BBA in Marketing from BRAC University (2025). I worked at Kreative Strategies as a Senior Account Executive (2026) and Shohoz as a Marketing Intern (2025). Skills: Canva, social media marketing, strategic planning."}
+                  placeholder={"Example:\nMy name is Alex Rahman. I have a degree in Computer Science. I worked as a junior developer and built several projects. Skills: JavaScript, React, problem solving, teamwork."}
                   value={aiBrief}
                   onChange={(e) => setAiBrief(e.target.value)}
                 />

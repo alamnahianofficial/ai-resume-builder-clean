@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 let lastCall = 0;
 
-// 🔹 Extract JSON safely from AI output
+// 🔹 Extract JSON safely
 function extractJSON(text: string) {
   const first = text.indexOf("{");
   const last = text.lastIndexOf("}");
@@ -10,7 +10,7 @@ function extractJSON(text: string) {
   return text.slice(first, last + 1);
 }
 
-// 🔹 Fallback (prevents frontend crash)
+// 🔹 Safe fallback (never break UI)
 function fallback() {
   return {
     full_name: "",
@@ -31,8 +31,8 @@ function fallback() {
   };
 }
 
-// 🔹 Strict prompt (forces JSON)
-function buildPrompt(userInput: string) {
+// 🔹 Strict prompt builder
+function buildPrompt(input: string) {
   return `
 You are a professional ATS resume generator.
 
@@ -41,7 +41,8 @@ CRITICAL RULES:
 - No explanation
 - No markdown
 - No extra text
-- Must match schema exactly
+- Must match schema EXACTLY
+- No null values (use "" or [])
 
 SCHEMA:
 {
@@ -73,7 +74,7 @@ SCHEMA:
 }
 
 USER INPUT:
-${userInput}
+${input}
 
 OUTPUT:
 Return ONLY JSON.
@@ -91,7 +92,7 @@ async function callAI(prompt: string) {
       "X-Title": "CV DADA",
     },
     body: JSON.stringify({
-      model: "meta-llama/llama-3.3-8b-instruct:free",
+      model: "mistralai/mistral-7b-instruct", // 🔥 more stable than free llama
       messages: [{ role: "user", content: prompt }],
       temperature: 0.3,
       max_tokens: 1200,
@@ -115,7 +116,7 @@ export async function POST(req: NextRequest) {
 
   try {
     // 🔸 Rate limit
-    if (Date.now() - lastCall < 2000) {
+    if (Date.now() - lastCall < 1500) {
       return NextResponse.json(fallback());
     }
     lastCall = Date.now();
@@ -132,6 +133,8 @@ export async function POST(req: NextRequest) {
     while (attempts < 3 && !parsed) {
       try {
         const raw = await callAI(buildPrompt(prompt));
+
+        console.log("📦 RAW TEXT:", raw);
 
         const cleaned = extractJSON(raw);
 
@@ -151,7 +154,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(fallback());
     }
 
-    // 🔹 Ensure safe structure (extra protection)
+    // 🔹 Guarantee schema safety
     parsed.full_name ||= "";
     parsed.email ||= "";
     parsed.phone ||= "";

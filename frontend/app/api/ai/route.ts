@@ -1,16 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 
-let lastCall = 0;
-
-// 🔹 Extract JSON safely
 function extractJSON(text: string) {
-  const first = text.indexOf("{");
-  const last = text.lastIndexOf("}");
-  if (first === -1 || last === -1) return null;
-  return text.slice(first, last + 1);
+  const match = text.match(/\{[\s\S]*\}/);
+  return match ? match[0] : null;
 }
 
-// 🔹 Safe fallback (never break UI)
 function fallback() {
   return {
     full_name: "",
@@ -31,18 +25,18 @@ function fallback() {
   };
 }
 
-// 🔹 Strict prompt builder
 function buildPrompt(input: string) {
   return `
-You are a professional ATS resume generator.
+You are an ATS resume generator.
 
-CRITICAL RULES:
-- Return ONLY valid JSON
+STRICT RULES:
+- Output ONLY JSON
 - No explanation
 - No markdown
-- No extra text
-- Must match schema EXACTLY
-- No null values (use "" or [])
+- No text before or after JSON
+- Must follow schema exactly
+
+If invalid JSON is generated, FIX it internally.
 
 SCHEMA:
 {
@@ -54,34 +48,20 @@ SCHEMA:
 "github": "",
 "portfolio": "",
 "summary": "",
-"education": [
-{"institution":"","degree":"","cgpa":"","start_date":"","end_date":""}
-],
-"experience": [
-{"company":"","role":"","start_date":"","end_date":"","bullets":[]}
-],
-"projects": [
-{"name":"","description":"","bullets":[]}
-],
-"skills": [
-{"name":""}
-],
-"certifications": [
-{"name":"","issuer":""}
-],
+"education": [],
+"experience": [],
+"projects": [],
+"skills": [],
+"certifications": [],
 "references": [],
 "extras": []
 }
 
-USER INPUT:
+INPUT:
 ${input}
-
-OUTPUT:
-Return ONLY JSON.
 `;
 }
 
-// 🔹 Call OpenRouter
 async function callAI(prompt: string) {
   const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
@@ -92,40 +72,36 @@ async function callAI(prompt: string) {
       "X-Title": "CV DADA",
     },
     body: JSON.stringify({
-      model: "mistralai/mistral-7b-instruct", // 🔥 more stable than free llama
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0.3,
+      model: "mistralai/mistral-7b-instruct", // 🔥 stable
+      messages: [
+        {
+          role: "system",
+          content: "You ONLY return valid JSON. No extra text.",
+        },
+        {
+          role: "user",
+          content: prompt,
+        },
+      ],
+      temperature: 0.2,
       max_tokens: 1200,
     }),
   });
 
   const data = await res.json();
 
-  console.log("🧠 RAW AI:", data);
-
   const content = data?.choices?.[0]?.message?.content;
 
-  if (!content) throw new Error("No AI response");
+  console.log("AI RAW:", content);
+
+  if (!content) throw new Error("Empty AI response");
 
   return content;
 }
 
-// 🔹 MAIN HANDLER
 export async function POST(req: NextRequest) {
-  console.log("✅ API HIT");
-
   try {
-    // 🔸 Rate limit
-    if (Date.now() - lastCall < 1500) {
-      return NextResponse.json(fallback());
-    }
-    lastCall = Date.now();
-
     const { prompt } = await req.json();
-
-    if (!prompt || !prompt.trim()) {
-      return NextResponse.json(fallback());
-    }
 
     let attempts = 0;
     let parsed = null;
@@ -133,8 +109,6 @@ export async function POST(req: NextRequest) {
     while (attempts < 3 && !parsed) {
       try {
         const raw = await callAI(buildPrompt(prompt));
-
-        console.log("📦 RAW TEXT:", raw);
 
         const cleaned = extractJSON(raw);
 
@@ -145,7 +119,7 @@ export async function POST(req: NextRequest) {
 
         parsed = JSON.parse(cleaned);
       } catch (err) {
-        console.error("🔁 Retry:", err);
+        console.log("Retrying...", err);
         attempts++;
       }
     }
@@ -155,26 +129,26 @@ export async function POST(req: NextRequest) {
     }
 
     // 🔹 Guarantee schema safety
-    parsed.full_name ||= "";
-    parsed.email ||= "";
-    parsed.phone ||= "";
-    parsed.location ||= "";
-    parsed.linkedin ||= "";
-    parsed.github ||= "";
-    parsed.portfolio ||= "";
-    parsed.summary ||= "";
-    parsed.education ||= [];
-    parsed.experience ||= [];
-    parsed.projects ||= [];
-    parsed.skills ||= [];
-    parsed.certifications ||= [];
-    parsed.references ||= [];
-    parsed.extras ||= [];
-
-    return NextResponse.json(parsed);
+    return NextResponse.json({
+      full_name: parsed.full_name || "",
+      email: parsed.email || "",
+      phone: parsed.phone || "",
+      location: parsed.location || "",
+      linkedin: parsed.linkedin || "",
+      github: parsed.github || "",
+      portfolio: parsed.portfolio || "",
+      summary: parsed.summary || "",
+      education: parsed.education || [],
+      experience: parsed.experience || [],
+      projects: parsed.projects || [],
+      skills: parsed.skills || [],
+      certifications: parsed.certifications || [],
+      references: parsed.references || [],
+      extras: parsed.extras || []
+    });
 
   } catch (err) {
-    console.error("❌ SERVER ERROR:", err);
+    console.error("SERVER ERROR:", err);
     return NextResponse.json(fallback());
   }
 }

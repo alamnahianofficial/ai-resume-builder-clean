@@ -23,10 +23,8 @@ import StandardCV, {
   ExtraEntry,
 } from "@/components/StandardCV";
 
-// ─── TYPES for docx children array ───────────────────────────────────────────
 type DocxChild = import("docx").Paragraph;
 
-// ─── BLANKS ──────────────────────────────────────────────────────────────────
 const uid = () => Date.now() + Math.random();
 const blankEdu = (): EduEntry => ({
   id: uid(),
@@ -84,7 +82,6 @@ const initResume = (): ResumeData => ({
   extras: [blankExtra()],
 });
 
-// ─── PDF HTML BUILDER ────────────────────────────────────────────────────────
 const FONT = "'Times New Roman', Times, serif";
 
 function buildPDFHtml(data: ResumeData, photo: string | null): string {
@@ -305,7 +302,7 @@ function buildPDFHtml(data: ResumeData, photo: string | null): string {
 }
 
 // ─── TYPES ───────────────────────────────────────────────────────────────────
-interface ParsedResume {
+interface AIResponse {
   full_name?: string;
   email?: string;
   phone?: string;
@@ -321,6 +318,7 @@ interface ParsedResume {
   certifications?: Omit<CertEntry, "id">[];
   references?: Omit<RefEntry, "id">[];
   extras?: Omit<ExtraEntry, "id">[];
+  error?: string;
 }
 
 // ─── AI CV GENERATOR ─────────────────────────────────────────────────────────
@@ -334,54 +332,35 @@ async function generateCVWithAI(
     const res = await fetch("/api/ai", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      // ✅ FIX 1: was `{ prompt }` which sent undefined — must use `brief`
-      body: JSON.stringify({
-        prompt: `Return ONLY valid JSON, no markdown, no explanation.
-Schema: {"full_name":"","email":"","phone":"","location":"","linkedin":"","github":"","portfolio":"","summary":"","education":[{"institution":"","degree":"","cgpa":"","duration":""}],"experience":[{"role":"","org":"","duration":"","bullets":""}],"projects":[{"name":"","link":"","duration":"","bullets":""}],"skills":[{"category":"","skills":""}],"certifications":[{"name":"","issuer":"","date":""}],"references":[],"extras":[]}
-Fill using this info: ${brief.slice(0, 800)}`,
-      }),
+      body: JSON.stringify({ prompt: brief.slice(0, 800) }),
     });
 
     setStatus("Parsing response…");
-    const d = (await res.json()) as { text?: string; error?: string };
 
-    // ✅ FIX 2: throw on API error so catch block handles it
+    // ✅ THE FIX: route.ts returns the object directly — read fields directly
+    const d = (await res.json()) as AIResponse;
+
+    console.log("AI response:", JSON.stringify(d));
+
     if (d.error) throw new Error(d.error);
 
-    const raw = d.text?.trim() ?? "";
-
-    // ✅ FIX 3: strip markdown fences if model wraps JSON in ```
-    const jsonStr = raw
-      .replace(/^```json\s*/i, "")
-      .replace(/^```\s*/i, "")
-      .replace(/```\s*$/i, "")
-      .trim();
-
-    // ✅ FIX 4: extract first {...} block as fallback
-    const match = jsonStr.match(/\{[\s\S]*\}/);
-    if (!match) throw new Error("No JSON object found in AI response");
-
-    const parsed = JSON.parse(match[0]) as ParsedResume;
-
+    // ✅ Map directly from response fields — no d.text needed
     const withIds: ResumeData = {
-      full_name: parsed.full_name ?? "",
-      email: parsed.email ?? "",
-      phone: parsed.phone ?? "",
-      location: parsed.location ?? "",
-      linkedin: parsed.linkedin ?? "",
-      github: parsed.github ?? "",
-      portfolio: parsed.portfolio ?? "",
-      summary: parsed.summary ?? "",
-      education: (parsed.education ?? []).map((e) => ({ ...e, id: uid() })),
-      experience: (parsed.experience ?? []).map((e) => ({ ...e, id: uid() })),
-      projects: (parsed.projects ?? []).map((e) => ({ ...e, id: uid() })),
-      skills: (parsed.skills ?? []).map((e) => ({ ...e, id: uid() })),
-      certifications: (parsed.certifications ?? []).map((e) => ({
-        ...e,
-        id: uid(),
-      })),
-      references: (parsed.references ?? []).map((e) => ({ ...e, id: uid() })),
-      extras: (parsed.extras ?? []).map((e) => ({ ...e, id: uid() })),
+      full_name: d.full_name ?? "",
+      email: d.email ?? "",
+      phone: d.phone ?? "",
+      location: d.location ?? "",
+      linkedin: d.linkedin ?? "",
+      github: d.github ?? "",
+      portfolio: d.portfolio ?? "",
+      summary: d.summary ?? "",
+      education: (d.education ?? []).map((e) => ({ ...e, id: uid() })),
+      experience: (d.experience ?? []).map((e) => ({ ...e, id: uid() })),
+      projects: (d.projects ?? []).map((e) => ({ ...e, id: uid() })),
+      skills: (d.skills ?? []).map((e) => ({ ...e, id: uid() })),
+      certifications: (d.certifications ?? []).map((e) => ({ ...e, id: uid() })),
+      references: (d.references ?? []).map((e) => ({ ...e, id: uid() })),
+      extras: (d.extras ?? []).map((e) => ({ ...e, id: uid() })),
     };
 
     setResume(withIds);
@@ -406,12 +385,7 @@ function SecHeader({ id, label, num, collapsed, onToggle }: SecHeaderProps) {
     <button
       onClick={() => onToggle(id)}
       className="w-full flex justify-between items-center mb-3"
-      style={{
-        background: "none",
-        border: "none",
-        cursor: "pointer",
-        padding: 0,
-      }}
+      style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}
     >
       <div className="sec-label mb-0">
         {num} · {label}
@@ -425,7 +399,7 @@ function SecHeader({ id, label, num, collapsed, onToggle }: SecHeaderProps) {
   );
 }
 
-// ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
+// ─── MAIN COMPONENT ──────────────────────────────────────────────────────────
 export default function Builder() {
   const [exportingPDF, setExportingPDF] = useState(false);
   const [exportingDOCX, setExportingDOCX] = useState(false);
@@ -476,7 +450,7 @@ export default function Builder() {
   const ref_ = makeU<RefEntry>("references", blankRef);
   const extra = makeU<ExtraEntry>("extras", blankExtra);
 
-  // ─── AI IMPROVE ────────────────────────────────────────────────────────
+  // ─── AI IMPROVE ──────────────────────────────────────────────────────────
   const aiImprove = async (
     text: string,
     ctx: string,
@@ -493,17 +467,18 @@ export default function Builder() {
           prompt: `Improve the following ${ctx} to be professional, concise, and ATS-friendly. Use action verbs. Keep bullet points one per line. Return ONLY the improved text, no explanation.\n\nOriginal:\n${text}`,
         }),
       });
-      const d = (await res.json()) as { text?: string; error?: string };
-      // ✅ FIX 5: handle error from API in aiImprove
+      const d = (await res.json()) as AIResponse & { summary?: string };
       if (d.error) throw new Error(d.error);
-      if (d.text) onResult(d.text.trim());
+      // For improve, the AI returns the text in summary field
+      const improved = d.summary || d.full_name || "";
+      if (improved) onResult(improved.trim());
     } catch (err) {
       console.error("AI improve error:", err);
     }
     setAiLoading(null);
   };
 
-  // ─── PDF EXPORT ────────────────────────────────────────────────────────
+  // ─── PDF EXPORT ──────────────────────────────────────────────────────────
   const exportPDF = async () => {
     setExportingPDF(true);
     try {
@@ -550,13 +525,8 @@ export default function Builder() {
       });
       document.body.removeChild(iframe);
 
-      const pdf = new jsPDF({
-        orientation: "portrait",
-        unit: "mm",
-        format: "a4",
-      });
-      const PW = 210,
-        PH = 297;
+      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+      const PW = 210, PH = 297;
       const pxPerMm = canvas.width / PW;
       const pageHpx = Math.round(PH * pxPerMm);
       const pages = Math.ceil(canvas.height / pageHpx);
@@ -580,18 +550,13 @@ export default function Builder() {
     setExportingPDF(false);
   };
 
-  // ─── DOCX EXPORT ───────────────────────────────────────────────────────
+  // ─── DOCX EXPORT ─────────────────────────────────────────────────────────
   const exportDOCX = async () => {
     setExportingDOCX(true);
     try {
       const {
-        Document,
-        Packer,
-        Paragraph,
-        TextRun,
-        AlignmentType,
-        BorderStyle,
-        ExternalHyperlink,
+        Document, Packer, Paragraph, TextRun,
+        AlignmentType, BorderStyle, ExternalHyperlink,
       } = await import("docx");
       const { saveAs } = await import("file-saver");
       const TN = "Times New Roman";
@@ -600,115 +565,36 @@ export default function Builder() {
       const SH = (t: string) =>
         new Paragraph({
           spacing: { before: 240, after: 60 },
-          border: {
-            bottom: { style: BorderStyle.SINGLE, size: 8, color: "000000" },
-          },
-          children: [
-            new TextRun({
-              text: t.toUpperCase(),
-              bold: true,
-              size: 22,
-              font: TN,
-            }),
-          ],
+          border: { bottom: { style: BorderStyle.SINGLE, size: 8, color: "000000" } },
+          children: [new TextRun({ text: t.toUpperCase(), bold: true, size: 22, font: TN })],
         });
-      const bd = (t: string) =>
-        new TextRun({ text: t, bold: true, size: 20, font: TN });
+      const bd = (t: string) => new TextRun({ text: t, bold: true, size: 20, font: TN });
       const tx = (t: string, color?: string, italics?: boolean) =>
-        new TextRun({
-          text: t,
-          size: 20,
-          font: TN,
-          ...(color ? { color } : {}),
-          ...(italics ? { italics } : {}),
-        });
+        new TextRun({ text: t, size: 20, font: TN, ...(color ? { color } : {}), ...(italics ? { italics } : {}) });
 
-      ch.push(
-        new Paragraph({
-          alignment: AlignmentType.CENTER,
-          spacing: { after: 40 },
-          children: [
-            new TextRun({
-              text: (resume.full_name || "YOUR NAME").toUpperCase(),
-              bold: true,
-              size: 48,
-              font: TN,
-            }),
-          ],
-        }),
-      );
+      ch.push(new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { after: 40 },
+        children: [new TextRun({ text: (resume.full_name || "YOUR NAME").toUpperCase(), bold: true, size: 48, font: TN })],
+      }));
 
-      const cl = [resume.email, resume.phone, resume.location]
-        .filter(Boolean)
-        .join("  |  ");
-      if (cl)
-        ch.push(
-          new Paragraph({
-            alignment: AlignmentType.CENTER,
-            spacing: { after: 40 },
-            children: [tx(cl, "444444")],
-          }),
-        );
-      if (resume.linkedin)
-        ch.push(
-          new Paragraph({
-            alignment: AlignmentType.CENTER,
-            spacing: { after: 20 },
-            children: [bd("LinkedIn: "), tx(resume.linkedin, "1a56db")],
-          }),
-        );
-      if (resume.github)
-        ch.push(
-          new Paragraph({
-            alignment: AlignmentType.CENTER,
-            spacing: { after: 20 },
-            children: [bd("GitHub: "), tx(resume.github, "1a56db")],
-          }),
-        );
-      if (resume.portfolio)
-        ch.push(
-          new Paragraph({
-            alignment: AlignmentType.CENTER,
-            spacing: { after: 160 },
-            children: [bd("Portfolio: "), tx(resume.portfolio, "1a56db")],
-          }),
-        );
+      const cl = [resume.email, resume.phone, resume.location].filter(Boolean).join("  |  ");
+      if (cl) ch.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 40 }, children: [tx(cl, "444444")] }));
+      if (resume.linkedin) ch.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 20 }, children: [bd("LinkedIn: "), tx(resume.linkedin, "1a56db")] }));
+      if (resume.github) ch.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 20 }, children: [bd("GitHub: "), tx(resume.github, "1a56db")] }));
+      if (resume.portfolio) ch.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 160 }, children: [bd("Portfolio: "), tx(resume.portfolio, "1a56db")] }));
 
       if (resume.summary) {
         ch.push(SH("Professional Profile"));
-        ch.push(
-          new Paragraph({
-            spacing: { after: 200 },
-            children: [tx(resume.summary)],
-          }),
-        );
+        ch.push(new Paragraph({ spacing: { after: 200 }, children: [tx(resume.summary)] }));
       }
 
       const eduR = resume.education.filter((e) => e.institution || e.degree);
       if (eduR.length) {
         ch.push(SH("Education"));
         for (const e of eduR) {
-          ch.push(
-            new Paragraph({
-              spacing: { before: 80, after: 0 },
-              children: [
-                bd(e.institution),
-                ...(e.duration
-                  ? [tx(`\t${e.duration}`, undefined, false)]
-                  : []),
-              ],
-            }),
-          );
-          if (e.degree || e.cgpa)
-            ch.push(
-              new Paragraph({
-                spacing: { after: 40 },
-                children: [
-                  tx(e.degree, undefined, true),
-                  ...(e.cgpa ? [tx(`\tCGPA: `), bd(e.cgpa)] : []),
-                ],
-              }),
-            );
+          ch.push(new Paragraph({ spacing: { before: 80, after: 0 }, children: [bd(e.institution), ...(e.duration ? [tx(`\t${e.duration}`)] : [])] }));
+          if (e.degree || e.cgpa) ch.push(new Paragraph({ spacing: { after: 40 }, children: [tx(e.degree, undefined, true), ...(e.cgpa ? [tx(`\tCGPA: `), bd(e.cgpa)] : [])] }));
         }
       }
 
@@ -716,36 +602,10 @@ export default function Builder() {
       if (expR.length) {
         ch.push(SH("Work Experience"));
         for (const e of expR) {
-          ch.push(
-            new Paragraph({
-              spacing: { before: 80, after: 0 },
-              children: [
-                bd(e.role),
-                ...(e.duration
-                  ? [
-                      new TextRun({
-                        text: `\t${e.duration}`,
-                        bold: true,
-                        size: 20,
-                        font: TN,
-                      }),
-                    ]
-                  : []),
-              ],
-            }),
-          );
-          if (e.org)
-            ch.push(
-              new Paragraph({ spacing: { after: 20 }, children: [tx(e.org)] }),
-            );
+          ch.push(new Paragraph({ spacing: { before: 80, after: 0 }, children: [bd(e.role), ...(e.duration ? [new TextRun({ text: `\t${e.duration}`, bold: true, size: 20, font: TN })] : [])] }));
+          if (e.org) ch.push(new Paragraph({ spacing: { after: 20 }, children: [tx(e.org)] }));
           for (const b of e.bullets.split("\n").filter((b) => b.trim()))
-            ch.push(
-              new Paragraph({
-                bullet: { level: 0 },
-                spacing: { after: 30 },
-                children: [tx(b.trim())],
-              }),
-            );
+            ch.push(new Paragraph({ bullet: { level: 0 }, spacing: { after: 30 }, children: [tx(b.trim())] }));
         }
       }
 
@@ -753,151 +613,45 @@ export default function Builder() {
       if (prR.length) {
         ch.push(SH("Projects / Thesis"));
         for (const p of prR) {
-          ch.push(
-            new Paragraph({
-              spacing: { before: 80, after: 0 },
-              children: [
-                bd(p.name),
-                ...(p.duration
-                  ? [
-                      new TextRun({
-                        text: `\t${p.duration}`,
-                        bold: true,
-                        size: 20,
-                        font: TN,
-                      }),
-                    ]
-                  : []),
-              ],
-            }),
-          );
-          if (p.link)
-            ch.push(
-              new Paragraph({
-                spacing: { after: 20 },
-                children: [
-                  tx("Link: "),
-                  new ExternalHyperlink({
-                    link: p.link,
-                    children: [
-                      new TextRun({
-                        text: p.link,
-                        size: 19,
-                        font: TN,
-                        color: "1a56db",
-                        underline: {},
-                      }),
-                    ],
-                  }),
-                ],
-              }),
-            );
+          ch.push(new Paragraph({ spacing: { before: 80, after: 0 }, children: [bd(p.name), ...(p.duration ? [new TextRun({ text: `\t${p.duration}`, bold: true, size: 20, font: TN })] : [])] }));
+          if (p.link) ch.push(new Paragraph({ spacing: { after: 20 }, children: [tx("Link: "), new ExternalHyperlink({ link: p.link, children: [new TextRun({ text: p.link, size: 19, font: TN, color: "1a56db", underline: {} })] })] }));
           for (const b of p.bullets.split("\n").filter((b) => b.trim()))
-            ch.push(
-              new Paragraph({
-                bullet: { level: 0 },
-                spacing: { after: 30 },
-                children: [tx(b.trim())],
-              }),
-            );
+            ch.push(new Paragraph({ bullet: { level: 0 }, spacing: { after: 30 }, children: [tx(b.trim())] }));
         }
       }
 
       const skR = resume.skills.filter((s) => s.skills);
       if (skR.length) {
         ch.push(SH("Skills"));
-        for (const s of skR)
-          ch.push(
-            new Paragraph({
-              spacing: { after: 30 },
-              children: [
-                ...(s.category ? [bd(`${s.category}: `)] : []),
-                tx(s.skills),
-              ],
-            }),
-          );
+        for (const s of skR) ch.push(new Paragraph({ spacing: { after: 30 }, children: [...(s.category ? [bd(`${s.category}: `)] : []), tx(s.skills)] }));
       }
 
       const ceR = resume.certifications.filter((c) => c.name);
       if (ceR.length) {
         ch.push(SH("Certifications"));
-        for (const c of ceR)
-          ch.push(
-            new Paragraph({
-              spacing: { after: 30 },
-              children: [
-                bd(c.name),
-                ...(c.issuer ? [tx(` — ${c.issuer}`, undefined, true)] : []),
-                ...(c.date
-                  ? [
-                      new TextRun({
-                        text: `\t${c.date}`,
-                        bold: true,
-                        size: 20,
-                        font: TN,
-                      }),
-                    ]
-                  : []),
-              ],
-            }),
-          );
+        for (const c of ceR) ch.push(new Paragraph({ spacing: { after: 30 }, children: [bd(c.name), ...(c.issuer ? [tx(` — ${c.issuer}`, undefined, true)] : []), ...(c.date ? [new TextRun({ text: `\t${c.date}`, bold: true, size: 20, font: TN })] : [])] }));
       }
 
       const rfR = resume.references.filter((r) => r.name);
       if (rfR.length) {
         ch.push(SH("References"));
         for (const r of rfR) {
-          ch.push(
-            new Paragraph({
-              spacing: { before: 80, after: 0 },
-              children: [bd(r.name)],
-            }),
-          );
-          if (r.title)
-            ch.push(
-              new Paragraph({
-                spacing: { after: 0 },
-                children: [tx(r.title, undefined, true)],
-              }),
-            );
-          if (r.org)
-            ch.push(
-              new Paragraph({ spacing: { after: 0 }, children: [tx(r.org)] }),
-            );
-          if (r.phone)
-            ch.push(
-              new Paragraph({
-                spacing: { after: 0 },
-                children: [tx(`Phone: ${r.phone}`)],
-              }),
-            );
-          if (r.email)
-            ch.push(
-              new Paragraph({
-                spacing: { after: 60 },
-                children: [tx(`Email: ${r.email}`, "1a56db")],
-              }),
-            );
+          ch.push(new Paragraph({ spacing: { before: 80, after: 0 }, children: [bd(r.name)] }));
+          if (r.title) ch.push(new Paragraph({ spacing: { after: 0 }, children: [tx(r.title, undefined, true)] }));
+          if (r.org) ch.push(new Paragraph({ spacing: { after: 0 }, children: [tx(r.org)] }));
+          if (r.phone) ch.push(new Paragraph({ spacing: { after: 0 }, children: [tx(`Phone: ${r.phone}`)] }));
+          if (r.email) ch.push(new Paragraph({ spacing: { after: 60 }, children: [tx(`Email: ${r.email}`, "1a56db")] }));
         }
       }
 
       const exR = resume.extras.filter((e) => e.label && e.value);
       if (exR.length) {
         ch.push(SH("Additional Information"));
-        for (const e of exR)
-          ch.push(
-            new Paragraph({
-              spacing: { after: 30 },
-              children: [bd(`${e.label}: `), tx(e.value)],
-            }),
-          );
+        for (const e of exR) ch.push(new Paragraph({ spacing: { after: 30 }, children: [bd(`${e.label}: `), tx(e.value)] }));
       }
 
       const doc = new Document({ sections: [{ children: ch }] });
-      saveAs(
-        await Packer.toBlob(doc),
-        `${resume.full_name || "Resume"}_CV.docx`,
-      );
+      saveAs(await Packer.toBlob(doc), `${resume.full_name || "Resume"}_CV.docx`);
     } catch (err) {
       console.error("DOCX error:", err);
       alert("DOCX export failed — check console.");
@@ -906,8 +660,7 @@ export default function Builder() {
   };
 
   const isExporting = exportingPDF || exportingDOCX;
-  const isAiGen =
-    aiGenStatus === "Calling AI…" || aiGenStatus === "Parsing response…";
+  const isAiGen = aiGenStatus === "Calling AI…" || aiGenStatus === "Parsing response…";
 
   return (
     <>
@@ -955,27 +708,18 @@ export default function Builder() {
       `}</style>
 
       <div className="flex flex-col lg:flex-row min-h-screen bg-[#030712] text-slate-200">
+
         {/* OVERLAY */}
         <AnimatePresence>
           {(isExporting || isAiGen) && (
             <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center"
             >
-              <motion.div
-                initial={{ scale: 0.8 }}
-                animate={{ scale: 1 }}
-                className="flex flex-col items-center gap-4"
-              >
+              <motion.div initial={{ scale: 0.8 }} animate={{ scale: 1 }} className="flex flex-col items-center gap-4">
                 <Loader2 className="w-14 h-14 text-blue-500 animate-spin" />
                 <p className="font-bold tracking-[.25em] text-xs uppercase text-slate-300 animate-pulse">
-                  {isAiGen
-                    ? aiGenStatus
-                    : exportingPDF
-                      ? "Generating PDF…"
-                      : "Building DOCX…"}
+                  {isAiGen ? aiGenStatus : exportingPDF ? "Generating PDF…" : "Building DOCX…"}
                 </p>
               </motion.div>
             </motion.div>
@@ -987,42 +731,26 @@ export default function Builder() {
           {showAIModal && (
             <motion.div
               className="ai-modal-bg"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={(e) => {
-                if ((e.target as HTMLElement).classList.contains("ai-modal-bg"))
-                  setShowAIModal(false);
-              }}
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={(e) => { if ((e.target as HTMLElement).classList.contains("ai-modal-bg")) setShowAIModal(false); }}
             >
-              <motion.div
-                className="ai-modal"
-                initial={{ scale: 0.9, y: 20 }}
-                animate={{ scale: 1, y: 0 }}
-              >
+              <motion.div className="ai-modal" initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }}>
                 <div className="flex items-center gap-3 mb-5">
                   <div className="w-10 h-10 rounded-xl bg-indigo-500/15 flex items-center justify-center">
                     <Wand2 size={20} color="#a5b4fc" />
                   </div>
                   <div>
-                    <h2 className="text-white font-black text-lg">
-                      AI CV Builder
-                    </h2>
-                    <p className="text-slate-500 text-xs">
-                      Describe yourself — AI writes your full CV
-                    </p>
+                    <h2 className="text-white font-black text-lg">AI CV Builder</h2>
+                    <p className="text-slate-500 text-xs">Describe yourself — AI writes your full CV</p>
                   </div>
                 </div>
                 <p className="text-slate-400 text-sm mb-3 leading-relaxed">
-                  Tell the AI your name, education, work history, skills, etc.
-                  It generates a complete professional CV instantly.
+                  Tell the AI your name, education, work history, skills, etc. It generates a complete professional CV instantly.
                 </p>
                 <textarea
                   className="di min-h-20 text-sm mb-4"
                   style={{ minHeight: 180 }}
-                  placeholder={
-                    "Example:\nMy name is Shafinur. I have a BBA in Marketing from BRAC University (2025). I worked at Kreative Strategies as a Senior Account Executive (2026) and Shohoz as a Marketing Intern (2025). Skills: Canva, social media marketing, strategic planning."
-                  }
+                  placeholder={"Example:\nMy name is Shafinur. I have a BBA in Marketing from BRAC University (2025). I worked at Kreative Strategies as a Senior Account Executive (2026) and Shohoz as a Marketing Intern (2025). Skills: Canva, social media marketing, strategic planning."}
                   value={aiBrief}
                   onChange={(e) => setAiBrief(e.target.value)}
                 />
@@ -1037,11 +765,7 @@ export default function Builder() {
                     onClick={async () => {
                       if (!aiBrief.trim()) return;
                       setShowAIModal(false);
-                      await generateCVWithAI(
-                        aiBrief,
-                        setResume,
-                        setAiGenStatus,
-                      );
+                      await generateCVWithAI(aiBrief, setResume, setAiGenStatus);
                       setAiGenStatus("");
                     }}
                     className="flex-1 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold transition-all flex items-center justify-center gap-2"
@@ -1050,9 +774,7 @@ export default function Builder() {
                   </button>
                 </div>
                 {aiGenStatus === "error" && (
-                  <p className="text-red-400 text-xs mt-3 text-center">
-                    Something went wrong. Try again.
-                  </p>
+                  <p className="text-red-400 text-xs mt-3 text-center">Something went wrong. Try again.</p>
                 )}
               </motion.div>
             </motion.div>
@@ -1062,51 +784,16 @@ export default function Builder() {
         {/* ══ LEFT EDITOR ══════════════════════════════════════════════════════ */}
         <div className="w-full lg:w-1/2 p-4 lg:p-6 overflow-y-auto max-h-screen scrollbar-hide border-r border-white/5">
           <header className="flex justify-between items-center mb-4">
-            <h1 className="text-3xl font-black text-blue-500 italic tracking-tighter">
-              CV DADA
-            </h1>
+            <h1 className="text-3xl font-black text-blue-500 italic tracking-tighter">CV DADA</h1>
             <div className="flex gap-2 flex-wrap justify-end">
-              <button
-                onClick={() => {
-                  setAiGenStatus("");
-                  setShowAIModal(true);
-                }}
-                className="abtn"
-                style={{
-                  background: "linear-gradient(135deg,#4f46e5,#7c3aed)",
-                }}
-              >
+              <button onClick={() => { setAiGenStatus(""); setShowAIModal(true); }} className="abtn" style={{ background: "linear-gradient(135deg,#4f46e5,#7c3aed)" }}>
                 <Wand2 size={13} /> AI Build
               </button>
-              <button
-                onClick={exportPDF}
-                disabled={isExporting}
-                className="abtn"
-                style={{
-                  background: "linear-gradient(135deg,#2563eb,#1d4ed8)",
-                }}
-              >
-                {exportingPDF ? (
-                  <Loader2 size={13} className="animate-spin" />
-                ) : (
-                  <Download size={13} />
-                )}{" "}
-                PDF
+              <button onClick={exportPDF} disabled={isExporting} className="abtn" style={{ background: "linear-gradient(135deg,#2563eb,#1d4ed8)" }}>
+                {exportingPDF ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />} PDF
               </button>
-              <button
-                onClick={exportDOCX}
-                disabled={isExporting}
-                className="abtn"
-                style={{
-                  background: "linear-gradient(135deg,#334155,#1e293b)",
-                }}
-              >
-                {exportingDOCX ? (
-                  <Loader2 size={13} className="animate-spin" />
-                ) : (
-                  <FileText size={13} />
-                )}{" "}
-                DOCX
+              <button onClick={exportDOCX} disabled={isExporting} className="abtn" style={{ background: "linear-gradient(135deg,#334155,#1e293b)" }}>
+                {exportingDOCX ? <Loader2 size={13} className="animate-spin" /> : <FileText size={13} />} DOCX
               </button>
             </div>
           </header>
@@ -1115,138 +802,50 @@ export default function Builder() {
             <Sparkles size={16} color="#a5b4fc" className="shrink-0" />
             <p className="text-slate-400 text-xs leading-relaxed">
               <span className="text-indigo-400 font-bold">New:</span> Click{" "}
-              <span className="text-white font-bold">AI Build</span> — describe
-              yourself and AI writes your entire CV free.
+              <span className="text-white font-bold">AI Build</span> — describe yourself and AI writes your entire CV free.
             </p>
           </div>
 
           <div className="mb-4 text-center text-[10px] text-slate-600 tracking-wider">
-            Built by{" "}
-            <span className="text-blue-500 font-bold">Nahian Alam</span> · CV
-            DADA
+            Built by <span className="text-blue-500 font-bold">Nahian Alam</span> · CV DADA
           </div>
 
           {/* Photo */}
           <div className="sec-box flex items-center gap-5 mb-2">
             <label className="cursor-pointer">
-              <div
-                style={{
-                  width: 88,
-                  height: 110,
-                  borderRadius: 10,
-                  overflow: "hidden",
-                  border: photo ? "2px solid #3b82f6" : "2px dashed #334155",
-                  background: "#0f172a",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
+              <div style={{ width: 88, height: 110, borderRadius: 10, overflow: "hidden", border: photo ? "2px solid #3b82f6" : "2px dashed #334155", background: "#0f172a", display: "flex", alignItems: "center", justifyContent: "center" }}>
                 {photo ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={photo}
-                    alt="Profile preview"
-                    style={{
-                      width: "100%",
-                      height: "100%",
-                      objectFit: "cover",
-                      objectPosition: "center top",
-                      display: "block",
-                    }}
-                  />
+                  <img src={photo} alt="Profile preview" style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center top", display: "block" }} />
                 ) : (
                   <ImageIcon size={22} color="#475569" />
                 )}
               </div>
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (!f) return;
-                  const r = new FileReader();
-                  r.onload = () => setPhoto(r.result as string);
-                  r.readAsDataURL(f);
-                }}
-              />
+              <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (!f) return; const r = new FileReader(); r.onload = () => setPhoto(r.result as string); r.readAsDataURL(f); }} />
             </label>
             <div>
-              <p className="text-sm font-bold text-white mb-1">
-                Passport Photo
-              </p>
-              <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest mb-2">
-                Click to upload
-              </p>
-              {photo && (
-                <button
-                  onClick={() => setPhoto(null)}
-                  className="text-[10px] text-red-400 hover:text-red-300 transition-colors font-semibold"
-                >
-                  ✕ Remove
-                </button>
-              )}
+              <p className="text-sm font-bold text-white mb-1">Passport Photo</p>
+              <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest mb-2">Click to upload</p>
+              {photo && <button onClick={() => setPhoto(null)} className="text-[10px] text-red-400 hover:text-red-300 transition-colors font-semibold">✕ Remove</button>}
             </div>
           </div>
 
           {/* 1. PERSONAL */}
           <div className="sec-box">
-            <SecHeader
-              id="personal"
-              label="Personal Information"
-              num="1"
-              collapsed={collapsed}
-              onToggle={toggleSection}
-            />
+            <SecHeader id="personal" label="Personal Information" num="1" collapsed={collapsed} onToggle={toggleSection} />
             {!collapsed["personal"] && (
               <>
                 <div className="grid grid-cols-2 gap-2 mb-2">
-                  <input
-                    className="di text-xs col-span-2"
-                    placeholder="Full Name"
-                    value={resume.full_name}
-                    onChange={(e) => setField("full_name", e.target.value)}
-                  />
-                  <input
-                    className="di text-xs"
-                    placeholder="Email"
-                    value={resume.email}
-                    onChange={(e) => setField("email", e.target.value)}
-                  />
-                  <input
-                    className="di text-xs"
-                    placeholder="Phone"
-                    value={resume.phone}
-                    onChange={(e) => setField("phone", e.target.value)}
-                  />
-                  <input
-                    className="di text-xs col-span-2"
-                    placeholder="Location  e.g. Dhaka, Bangladesh"
-                    value={resume.location}
-                    onChange={(e) => setField("location", e.target.value)}
-                  />
+                  <input className="di text-xs col-span-2" placeholder="Full Name" value={resume.full_name} onChange={(e) => setField("full_name", e.target.value)} />
+                  <input className="di text-xs" placeholder="Email" value={resume.email} onChange={(e) => setField("email", e.target.value)} />
+                  <input className="di text-xs" placeholder="Phone" value={resume.phone} onChange={(e) => setField("phone", e.target.value)} />
+                  <input className="di text-xs col-span-2" placeholder="Location  e.g. Dhaka, Bangladesh" value={resume.location} onChange={(e) => setField("location", e.target.value)} />
                 </div>
                 <div className="sec-label mt-3 mb-2">Profile Links</div>
                 <div className="space-y-2">
-                  <input
-                    className="di text-xs"
-                    placeholder="LinkedIn URL"
-                    value={resume.linkedin}
-                    onChange={(e) => setField("linkedin", e.target.value)}
-                  />
-                  <input
-                    className="di text-xs"
-                    placeholder="GitHub URL"
-                    value={resume.github}
-                    onChange={(e) => setField("github", e.target.value)}
-                  />
-                  <input
-                    className="di text-xs"
-                    placeholder="Portfolio / Website"
-                    value={resume.portfolio}
-                    onChange={(e) => setField("portfolio", e.target.value)}
-                  />
+                  <input className="di text-xs" placeholder="LinkedIn URL" value={resume.linkedin} onChange={(e) => setField("linkedin", e.target.value)} />
+                  <input className="di text-xs" placeholder="GitHub URL" value={resume.github} onChange={(e) => setField("github", e.target.value)} />
+                  <input className="di text-xs" placeholder="Portfolio / Website" value={resume.portfolio} onChange={(e) => setField("portfolio", e.target.value)} />
                 </div>
               </>
             )}
@@ -1255,567 +854,203 @@ export default function Builder() {
           {/* 2. SUMMARY */}
           <div className="sec-box">
             <div className="flex items-center justify-between">
-              <SecHeader
-                id="summary"
-                label="Professional Summary"
-                num="2"
-                collapsed={collapsed}
-                onToggle={toggleSection}
-              />
-              <button
-                className="aibtn mb-3 ml-2 shrink-0"
-                disabled={!!aiLoading}
-                onClick={() =>
-                  aiImprove(
-                    resume.summary,
-                    "professional summary",
-                    (v) => setField("summary", v),
-                    "summary",
-                  )
-                }
-              >
-                {aiLoading === "summary" ? (
-                  <Loader2 size={10} className="animate-spin" />
-                ) : (
-                  <Sparkles size={10} />
-                )}{" "}
-                AI
+              <SecHeader id="summary" label="Professional Summary" num="2" collapsed={collapsed} onToggle={toggleSection} />
+              <button className="aibtn mb-3 ml-2 shrink-0" disabled={!!aiLoading}
+                onClick={() => aiImprove(resume.summary, "professional summary", (v) => setField("summary", v), "summary")}>
+                {aiLoading === "summary" ? <Loader2 size={10} className="animate-spin" /> : <Sparkles size={10} />} AI
               </button>
             </div>
             {!collapsed["summary"] && (
-              <textarea
-                className="di min-h-20 text-xs"
-                placeholder="Write a 2–4 sentence professional profile…"
-                value={resume.summary}
-                onChange={(e) => setField("summary", e.target.value)}
-              />
+              <textarea className="di min-h-20 text-xs" placeholder="Write a 2–4 sentence professional profile…" value={resume.summary} onChange={(e) => setField("summary", e.target.value)} />
             )}
           </div>
 
           {/* 3. EDUCATION */}
           <div className="sec-box">
-            <SecHeader
-              id="edu"
-              label="Education"
-              num="3"
-              collapsed={collapsed}
-              onToggle={toggleSection}
-            />
+            <SecHeader id="edu" label="Education" num="3" collapsed={collapsed} onToggle={toggleSection} />
             {!collapsed["edu"] && (
               <>
                 {resume.education.map((e, idx) => (
                   <div key={e.id}>
                     {idx > 0 && <hr className="entry-divider" />}
                     <div className="flex justify-between items-center mb-2">
-                      <span className="text-[10px] text-slate-600 font-bold">
-                        Degree {idx + 1}
-                      </span>
-                      {idx > 0 && (
-                        <button
-                          className="icon-btn"
-                          onClick={() => edu.remove(e.id)}
-                        >
-                          <Trash2 size={12} color="#f87171" />
-                        </button>
-                      )}
+                      <span className="text-[10px] text-slate-600 font-bold">Degree {idx + 1}</span>
+                      {idx > 0 && <button className="icon-btn" onClick={() => edu.remove(e.id)}><Trash2 size={12} color="#f87171" /></button>}
                     </div>
                     <div className="grid grid-cols-2 gap-2">
-                      <input
-                        className="di text-xs col-span-2"
-                        placeholder="University / Institution"
-                        value={e.institution}
-                        onChange={(ev) =>
-                          edu.upd(e.id, "institution", ev.target.value)
-                        }
-                      />
-                      <input
-                        className="di text-xs col-span-2"
-                        placeholder="Degree  e.g. BSc Computer Science"
-                        value={e.degree}
-                        onChange={(ev) =>
-                          edu.upd(e.id, "degree", ev.target.value)
-                        }
-                      />
-                      <input
-                        className="di text-xs"
-                        placeholder="Duration  e.g. 2020 – 2024"
-                        value={e.duration}
-                        onChange={(ev) =>
-                          edu.upd(e.id, "duration", ev.target.value)
-                        }
-                      />
-                      <input
-                        className="di text-xs"
-                        placeholder="CGPA  e.g. 3.75"
-                        value={e.cgpa}
-                        onChange={(ev) =>
-                          edu.upd(e.id, "cgpa", ev.target.value)
-                        }
-                      />
+                      <input className="di text-xs col-span-2" placeholder="University / Institution" value={e.institution} onChange={(ev) => edu.upd(e.id, "institution", ev.target.value)} />
+                      <input className="di text-xs col-span-2" placeholder="Degree  e.g. BSc Computer Science" value={e.degree} onChange={(ev) => edu.upd(e.id, "degree", ev.target.value)} />
+                      <input className="di text-xs" placeholder="Duration  e.g. 2020 – 2024" value={e.duration} onChange={(ev) => edu.upd(e.id, "duration", ev.target.value)} />
+                      <input className="di text-xs" placeholder="CGPA  e.g. 3.75" value={e.cgpa} onChange={(ev) => edu.upd(e.id, "cgpa", ev.target.value)} />
                     </div>
                   </div>
                 ))}
-                <button className="add-btn" onClick={edu.add}>
-                  + Add Degree
-                </button>
+                <button className="add-btn" onClick={edu.add}>+ Add Degree</button>
               </>
             )}
           </div>
 
           {/* 4. EXPERIENCE */}
           <div className="sec-box">
-            <SecHeader
-              id="exp"
-              label="Work Experience"
-              num="4"
-              collapsed={collapsed}
-              onToggle={toggleSection}
-            />
+            <SecHeader id="exp" label="Work Experience" num="4" collapsed={collapsed} onToggle={toggleSection} />
             {!collapsed["exp"] && (
               <>
                 {resume.experience.map((e, idx) => (
                   <div key={e.id}>
                     {idx > 0 && <hr className="entry-divider" />}
                     <div className="flex justify-between items-center mb-2">
-                      <span className="text-[10px] text-slate-600 font-bold">
-                        Job {idx + 1}
-                      </span>
-                      {idx > 0 && (
-                        <button
-                          className="icon-btn"
-                          onClick={() => exp.remove(e.id)}
-                        >
-                          <Trash2 size={12} color="#f87171" />
-                        </button>
-                      )}
+                      <span className="text-[10px] text-slate-600 font-bold">Job {idx + 1}</span>
+                      {idx > 0 && <button className="icon-btn" onClick={() => exp.remove(e.id)}><Trash2 size={12} color="#f87171" /></button>}
                     </div>
                     <div className="grid grid-cols-2 gap-2 mb-2">
-                      <input
-                        className="di text-xs col-span-2"
-                        placeholder="Role / Position"
-                        value={e.role}
-                        onChange={(ev) =>
-                          exp.upd(e.id, "role", ev.target.value)
-                        }
-                      />
-                      <input
-                        className="di text-xs col-span-2"
-                        placeholder="Company / Organization"
-                        value={e.org}
-                        onChange={(ev) => exp.upd(e.id, "org", ev.target.value)}
-                      />
-                      <input
-                        className="di text-xs col-span-2"
-                        placeholder="Duration  e.g. Jan 2022 – Present"
-                        value={e.duration}
-                        onChange={(ev) =>
-                          exp.upd(e.id, "duration", ev.target.value)
-                        }
-                      />
+                      <input className="di text-xs col-span-2" placeholder="Role / Position" value={e.role} onChange={(ev) => exp.upd(e.id, "role", ev.target.value)} />
+                      <input className="di text-xs col-span-2" placeholder="Company / Organization" value={e.org} onChange={(ev) => exp.upd(e.id, "org", ev.target.value)} />
+                      <input className="di text-xs col-span-2" placeholder="Duration  e.g. Jan 2022 – Present" value={e.duration} onChange={(ev) => exp.upd(e.id, "duration", ev.target.value)} />
                     </div>
                     <div className="flex justify-between items-center mb-1">
-                      <span className="text-[9px] text-slate-600 font-bold uppercase tracking-widest">
-                        Responsibilities (one per line)
-                      </span>
-                      <button
-                        className="aibtn"
-                        disabled={!!aiLoading}
-                        onClick={() =>
-                          aiImprove(
-                            e.bullets,
-                            "work experience",
-                            (v) => exp.upd(e.id, "bullets", v),
-                            `exp-${e.id}`,
-                          )
-                        }
-                      >
-                        {aiLoading === `exp-${e.id}` ? (
-                          <Loader2 size={10} className="animate-spin" />
-                        ) : (
-                          <Sparkles size={10} />
-                        )}{" "}
-                        AI
+                      <span className="text-[9px] text-slate-600 font-bold uppercase tracking-widest">Responsibilities (one per line)</span>
+                      <button className="aibtn" disabled={!!aiLoading}
+                        onClick={() => aiImprove(e.bullets, "work experience", (v) => exp.upd(e.id, "bullets", v), `exp-${e.id}`)}>
+                        {aiLoading === `exp-${e.id}` ? <Loader2 size={10} className="animate-spin" /> : <Sparkles size={10} />} AI
                       </button>
                     </div>
-                    <textarea
-                      className="di min-h-20 text-xs font-mono"
-                      placeholder="Led team of 5 to deliver…&#10;Reduced load time by 40%…"
-                      value={e.bullets}
-                      onChange={(ev) =>
-                        exp.upd(e.id, "bullets", ev.target.value)
-                      }
-                    />
+                    <textarea className="di min-h-20 text-xs font-mono" placeholder="Led team of 5 to deliver…&#10;Reduced load time by 40%…" value={e.bullets} onChange={(ev) => exp.upd(e.id, "bullets", ev.target.value)} />
                   </div>
                 ))}
-                <button className="add-btn" onClick={exp.add}>
-                  + Add Job
-                </button>
+                <button className="add-btn" onClick={exp.add}>+ Add Job</button>
               </>
             )}
           </div>
 
           {/* 5. PROJECTS */}
           <div className="sec-box">
-            <SecHeader
-              id="proj"
-              label="Projects / Thesis"
-              num="5"
-              collapsed={collapsed}
-              onToggle={toggleSection}
-            />
+            <SecHeader id="proj" label="Projects / Thesis" num="5" collapsed={collapsed} onToggle={toggleSection} />
             {!collapsed["proj"] && (
               <>
                 {resume.projects.map((p, idx) => (
                   <div key={p.id}>
                     {idx > 0 && <hr className="entry-divider" />}
                     <div className="flex justify-between items-center mb-2">
-                      <span className="text-[10px] text-slate-600 font-bold">
-                        Project {idx + 1}
-                      </span>
-                      {idx > 0 && (
-                        <button
-                          className="icon-btn"
-                          onClick={() => proj.remove(p.id)}
-                        >
-                          <Trash2 size={12} color="#f87171" />
-                        </button>
-                      )}
+                      <span className="text-[10px] text-slate-600 font-bold">Project {idx + 1}</span>
+                      {idx > 0 && <button className="icon-btn" onClick={() => proj.remove(p.id)}><Trash2 size={12} color="#f87171" /></button>}
                     </div>
                     <div className="grid grid-cols-2 gap-2 mb-2">
-                      <input
-                        className="di text-xs col-span-2"
-                        placeholder="Project / Thesis Title"
-                        value={p.name}
-                        onChange={(ev) =>
-                          proj.upd(p.id, "name", ev.target.value)
-                        }
-                      />
-                      <input
-                        className="di text-xs col-span-2"
-                        placeholder="Duration  e.g. 2023 – 2024"
-                        value={p.duration}
-                        onChange={(ev) =>
-                          proj.upd(p.id, "duration", ev.target.value)
-                        }
-                      />
+                      <input className="di text-xs col-span-2" placeholder="Project / Thesis Title" value={p.name} onChange={(ev) => proj.upd(p.id, "name", ev.target.value)} />
+                      <input className="di text-xs col-span-2" placeholder="Duration  e.g. 2023 – 2024" value={p.duration} onChange={(ev) => proj.upd(p.id, "duration", ev.target.value)} />
                     </div>
                     <div className="link-row mb-2">
-                      <svg
-                        width="12"
-                        height="12"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="#60a5fa"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
                         <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
                       </svg>
-                      <input
-                        placeholder="GitHub / Live demo link"
-                        value={p.link}
-                        onChange={(ev) =>
-                          proj.upd(p.id, "link", ev.target.value)
-                        }
-                      />
+                      <input placeholder="GitHub / Live demo link" value={p.link} onChange={(ev) => proj.upd(p.id, "link", ev.target.value)} />
                     </div>
                     <div className="flex justify-between items-center mb-1">
-                      <span className="text-[9px] text-slate-600 font-bold uppercase tracking-widest">
-                        Description (one per line)
-                      </span>
-                      <button
-                        className="aibtn"
-                        disabled={!!aiLoading}
-                        onClick={() =>
-                          aiImprove(
-                            p.bullets,
-                            "project description",
-                            (v) => proj.upd(p.id, "bullets", v),
-                            `proj-${p.id}`,
-                          )
-                        }
-                      >
-                        {aiLoading === `proj-${p.id}` ? (
-                          <Loader2 size={10} className="animate-spin" />
-                        ) : (
-                          <Sparkles size={10} />
-                        )}{" "}
-                        AI
+                      <span className="text-[9px] text-slate-600 font-bold uppercase tracking-widest">Description (one per line)</span>
+                      <button className="aibtn" disabled={!!aiLoading}
+                        onClick={() => aiImprove(p.bullets, "project description", (v) => proj.upd(p.id, "bullets", v), `proj-${p.id}`)}>
+                        {aiLoading === `proj-${p.id}` ? <Loader2 size={10} className="animate-spin" /> : <Sparkles size={10} />} AI
                       </button>
                     </div>
-                    <textarea
-                      className="di text-xs font-mono"
-                      style={{ minHeight: 70 }}
-                      placeholder="Built REST API with…&#10;Achieved 95% test coverage…"
-                      value={p.bullets}
-                      onChange={(ev) =>
-                        proj.upd(p.id, "bullets", ev.target.value)
-                      }
-                    />
+                    <textarea className="di text-xs font-mono" style={{ minHeight: 70 }} placeholder="Built REST API with…&#10;Achieved 95% test coverage…" value={p.bullets} onChange={(ev) => proj.upd(p.id, "bullets", ev.target.value)} />
                   </div>
                 ))}
-                <button className="add-btn" onClick={proj.add}>
-                  + Add Project
-                </button>
+                <button className="add-btn" onClick={proj.add}>+ Add Project</button>
               </>
             )}
           </div>
 
           {/* 6. SKILLS */}
           <div className="sec-box">
-            <SecHeader
-              id="skills"
-              label="Skills"
-              num="6"
-              collapsed={collapsed}
-              onToggle={toggleSection}
-            />
+            <SecHeader id="skills" label="Skills" num="6" collapsed={collapsed} onToggle={toggleSection} />
             {!collapsed["skills"] && (
               <>
-                <p className="text-[10px] text-slate-600 mb-2">
-                  Category: list of skills on each row
-                </p>
+                <p className="text-[10px] text-slate-600 mb-2">Category: list of skills on each row</p>
                 {resume.skills.map((s, idx) => (
                   <div key={s.id} className="flex gap-2 mb-2 items-center">
-                    <input
-                      className="di text-xs"
-                      style={{ maxWidth: 130 }}
-                      placeholder="e.g. Languages"
-                      value={s.category}
-                      onChange={(e) =>
-                        skill.upd(s.id, "category", e.target.value)
-                      }
-                    />
-                    <input
-                      className="di text-xs flex-1"
-                      placeholder="Python, React, Docker…"
-                      value={s.skills}
-                      onChange={(e) =>
-                        skill.upd(s.id, "skills", e.target.value)
-                      }
-                    />
-                    {idx > 0 && (
-                      <button
-                        className="icon-btn"
-                        onClick={() => skill.remove(s.id)}
-                      >
-                        <Trash2 size={12} color="#f87171" />
-                      </button>
-                    )}
+                    <input className="di text-xs" style={{ maxWidth: 130 }} placeholder="e.g. Languages" value={s.category} onChange={(e) => skill.upd(s.id, "category", e.target.value)} />
+                    <input className="di text-xs flex-1" placeholder="Python, React, Docker…" value={s.skills} onChange={(e) => skill.upd(s.id, "skills", e.target.value)} />
+                    {idx > 0 && <button className="icon-btn" onClick={() => skill.remove(s.id)}><Trash2 size={12} color="#f87171" /></button>}
                   </div>
                 ))}
-                <button className="add-btn" onClick={skill.add}>
-                  + Add Category
-                </button>
+                <button className="add-btn" onClick={skill.add}>+ Add Category</button>
               </>
             )}
           </div>
 
           {/* 7. CERTIFICATIONS */}
           <div className="sec-box">
-            <SecHeader
-              id="cert"
-              label="Certifications"
-              num="7"
-              collapsed={collapsed}
-              onToggle={toggleSection}
-            />
+            <SecHeader id="cert" label="Certifications" num="7" collapsed={collapsed} onToggle={toggleSection} />
             {!collapsed["cert"] && (
               <>
                 {resume.certifications.map((c, idx) => (
-                  <div
-                    key={c.id}
-                    className="grid grid-cols-2 gap-2 mb-2 items-center"
-                  >
-                    <input
-                      className="di text-xs col-span-2"
-                      placeholder="Certificate Name"
-                      value={c.name}
-                      onChange={(e) => cert.upd(c.id, "name", e.target.value)}
-                    />
-                    <input
-                      className="di text-xs"
-                      placeholder="Issuer  e.g. Coursera"
-                      value={c.issuer}
-                      onChange={(e) => cert.upd(c.id, "issuer", e.target.value)}
-                    />
+                  <div key={c.id} className="grid grid-cols-2 gap-2 mb-2 items-center">
+                    <input className="di text-xs col-span-2" placeholder="Certificate Name" value={c.name} onChange={(e) => cert.upd(c.id, "name", e.target.value)} />
+                    <input className="di text-xs" placeholder="Issuer  e.g. Coursera" value={c.issuer} onChange={(e) => cert.upd(c.id, "issuer", e.target.value)} />
                     <div className="flex gap-2">
-                      <input
-                        className="di text-xs flex-1"
-                        placeholder="Date"
-                        value={c.date}
-                        onChange={(e) => cert.upd(c.id, "date", e.target.value)}
-                      />
-                      {idx > 0 && (
-                        <button
-                          className="icon-btn"
-                          onClick={() => cert.remove(c.id)}
-                        >
-                          <Trash2 size={12} color="#f87171" />
-                        </button>
-                      )}
+                      <input className="di text-xs flex-1" placeholder="Date" value={c.date} onChange={(e) => cert.upd(c.id, "date", e.target.value)} />
+                      {idx > 0 && <button className="icon-btn" onClick={() => cert.remove(c.id)}><Trash2 size={12} color="#f87171" /></button>}
                     </div>
                   </div>
                 ))}
-                <button className="add-btn" onClick={cert.add}>
-                  + Add Certificate
-                </button>
+                <button className="add-btn" onClick={cert.add}>+ Add Certificate</button>
               </>
             )}
           </div>
 
           {/* 8. REFERENCES */}
           <div className="sec-box">
-            <SecHeader
-              id="refs"
-              label="References"
-              num="8"
-              collapsed={collapsed}
-              onToggle={toggleSection}
-            />
+            <SecHeader id="refs" label="References" num="8" collapsed={collapsed} onToggle={toggleSection} />
             {!collapsed["refs"] && (
               <>
                 {resume.references.map((r, idx) => (
                   <div key={r.id}>
                     {idx > 0 && <hr className="entry-divider" />}
                     <div className="flex justify-between items-center mb-2">
-                      <span className="text-[10px] text-slate-600 font-bold">
-                        Reference {idx + 1}
-                      </span>
-                      {idx > 0 && (
-                        <button
-                          className="icon-btn"
-                          onClick={() => ref_.remove(r.id)}
-                        >
-                          <Trash2 size={12} color="#f87171" />
-                        </button>
-                      )}
+                      <span className="text-[10px] text-slate-600 font-bold">Reference {idx + 1}</span>
+                      {idx > 0 && <button className="icon-btn" onClick={() => ref_.remove(r.id)}><Trash2 size={12} color="#f87171" /></button>}
                     </div>
                     <div className="grid grid-cols-2 gap-2">
-                      <input
-                        className="di text-xs col-span-2"
-                        placeholder="Full Name"
-                        value={r.name}
-                        onChange={(e) => ref_.upd(r.id, "name", e.target.value)}
-                      />
-                      <input
-                        className="di text-xs"
-                        placeholder="Job Title"
-                        value={r.title}
-                        onChange={(e) =>
-                          ref_.upd(r.id, "title", e.target.value)
-                        }
-                      />
-                      <input
-                        className="di text-xs"
-                        placeholder="Organization"
-                        value={r.org}
-                        onChange={(e) => ref_.upd(r.id, "org", e.target.value)}
-                      />
-                      <input
-                        className="di text-xs"
-                        placeholder="Phone"
-                        value={r.phone}
-                        onChange={(e) =>
-                          ref_.upd(r.id, "phone", e.target.value)
-                        }
-                      />
-                      <input
-                        className="di text-xs"
-                        placeholder="Email"
-                        value={r.email}
-                        onChange={(e) =>
-                          ref_.upd(r.id, "email", e.target.value)
-                        }
-                      />
+                      <input className="di text-xs col-span-2" placeholder="Full Name" value={r.name} onChange={(e) => ref_.upd(r.id, "name", e.target.value)} />
+                      <input className="di text-xs" placeholder="Job Title" value={r.title} onChange={(e) => ref_.upd(r.id, "title", e.target.value)} />
+                      <input className="di text-xs" placeholder="Organization" value={r.org} onChange={(e) => ref_.upd(r.id, "org", e.target.value)} />
+                      <input className="di text-xs" placeholder="Phone" value={r.phone} onChange={(e) => ref_.upd(r.id, "phone", e.target.value)} />
+                      <input className="di text-xs" placeholder="Email" value={r.email} onChange={(e) => ref_.upd(r.id, "email", e.target.value)} />
                     </div>
                   </div>
                 ))}
-                <button className="add-btn" onClick={ref_.add}>
-                  + Add Reference
-                </button>
+                <button className="add-btn" onClick={ref_.add}>+ Add Reference</button>
               </>
             )}
           </div>
 
           {/* 9. ADDITIONAL */}
           <div className="sec-box pb-6">
-            <SecHeader
-              id="extra"
-              label="Additional Info"
-              num="9"
-              collapsed={collapsed}
-              onToggle={toggleSection}
-            />
+            <SecHeader id="extra" label="Additional Info" num="9" collapsed={collapsed} onToggle={toggleSection} />
             {!collapsed["extra"] && (
               <>
                 {resume.extras.map((e, idx) => (
                   <div key={e.id} className="flex gap-2 mb-2 items-center">
-                    <input
-                      className="di text-xs"
-                      style={{ maxWidth: 150 }}
-                      placeholder="Label"
-                      value={e.label}
-                      onChange={(ev) =>
-                        extra.upd(e.id, "label", ev.target.value)
-                      }
-                    />
-                    <input
-                      className="di text-xs flex-1"
-                      placeholder="Value"
-                      value={e.value}
-                      onChange={(ev) =>
-                        extra.upd(e.id, "value", ev.target.value)
-                      }
-                    />
-                    {idx > 0 && (
-                      <button
-                        className="icon-btn"
-                        onClick={() => extra.remove(e.id)}
-                      >
-                        <Trash2 size={12} color="#f87171" />
-                      </button>
-                    )}
+                    <input className="di text-xs" style={{ maxWidth: 150 }} placeholder="Label" value={e.label} onChange={(ev) => extra.upd(e.id, "label", ev.target.value)} />
+                    <input className="di text-xs flex-1" placeholder="Value" value={e.value} onChange={(ev) => extra.upd(e.id, "value", ev.target.value)} />
+                    {idx > 0 && <button className="icon-btn" onClick={() => extra.remove(e.id)}><Trash2 size={12} color="#f87171" /></button>}
                   </div>
                 ))}
-                <button className="add-btn" onClick={extra.add}>
-                  + Add Row
-                </button>
+                <button className="add-btn" onClick={extra.add}>+ Add Row</button>
               </>
             )}
           </div>
         </div>
 
         {/* ══ RIGHT PREVIEW ════════════════════════════════════════════════════ */}
-        <div
-          className="hidden lg:block w-full lg:w-1/2 bg-[#010413] overflow-y-auto scrollbar-hide"
-          style={{ minHeight: "100vh" }}
-        >
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "center",
-              padding: "40px 0",
-              minHeight: "100%",
-            }}
-          >
-            <div
-              style={{
-                transformOrigin: "top center",
-                transform: "scale(0.65)",
-                alignSelf: "flex-start",
-              }}
-            >
-              <StandardCV
-                data={resume}
-                photo={photo}
-                previewRef={previewRef as React.RefObject<HTMLDivElement>}
-              />
+        <div className="hidden lg:block w-full lg:w-1/2 bg-[#010413] overflow-y-auto scrollbar-hide" style={{ minHeight: "100vh" }}>
+          <div style={{ display: "flex", justifyContent: "center", padding: "40px 0", minHeight: "100%" }}>
+            <div style={{ transformOrigin: "top center", transform: "scale(0.65)", alignSelf: "flex-start" }}>
+              <StandardCV data={resume} photo={photo} previewRef={previewRef as React.RefObject<HTMLDivElement>} />
             </div>
           </div>
         </div>
+
       </div>
     </>
   );

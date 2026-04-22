@@ -2,80 +2,102 @@ import { NextRequest, NextResponse } from "next/server";
 
 let lastCall = 0;
 
+function extractJSON(text: string) {
+  const first = text.indexOf("{");
+  const last = text.lastIndexOf("}");
+  if (first === -1 || last === -1) return null;
+  return text.slice(first, last + 1);
+}
+
+function fallback() {
+  return {
+    full_name: "",
+    email: "",
+    phone: "",
+    location: "",
+    linkedin": "",
+    github": "",
+    portfolio": "",
+    summary": "AI failed. Try again.",
+    education": [],
+    experience": [],
+    projects": [],
+    skills": [],
+    certifications": [],
+    references": [],
+    extras": []
+  };
+}
+
+async function callAI(prompt: string) {
+  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "meta-llama/llama-3.3-8b-instruct:free",
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.3,
+      max_tokens: 1200,
+    }),
+  });
+
+  const data = await res.json();
+
+  const content = data?.choices?.[0]?.message?.content;
+
+  if (!content) throw new Error("No AI response");
+
+  return content;
+}
+
 export async function POST(req: NextRequest) {
+  console.log("✅ API HIT");
+
   try {
-    if (Date.now() - lastCall < 3000) {
-      return NextResponse.json(
-        { error: "Too fast. Please wait." },
-        { status: 429 },
-      );
+    // rate limit
+    if (Date.now() - lastCall < 2000) {
+      return NextResponse.json(fallback());
     }
     lastCall = Date.now();
 
-    const body = await req.json();
-    const { prompt } = body;
+    const { prompt } = await req.json();
 
     if (!prompt?.trim()) {
-      return NextResponse.json(
-        { error: "No prompt provided" },
-        { status: 400 },
-      );
+      return NextResponse.json(fallback());
     }
 
-    if (!process.env.OPENROUTER_API_KEY) {
-      return NextResponse.json({ error: "Missing API key" }, { status: 500 });
+    let attempts = 0;
+    let parsed = null;
+
+    while (attempts < 3 && !parsed) {
+      try {
+        const raw = await callAI(prompt);
+
+        const cleaned = extractJSON(raw);
+
+        if (!cleaned) {
+          attempts++;
+          continue;
+        }
+
+        parsed = JSON.parse(cleaned);
+      } catch (err) {
+        console.error("Retry:", err);
+        attempts++;
+      }
     }
 
-    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://cvdada.vercel.app",
-        "X-Title": "CV DADA",
-      },
-      body: JSON.stringify({
-        model: "meta-llama/llama-3.3-8b-instruct:free",
-        messages: [{ role: "user", content: prompt }],
-        max_tokens: 1000,
-        temperature: 0.7,
-      }),
-    });
-
-    const rawText = await res.text();
-    console.log("RAW OPENROUTER:", rawText.slice(0, 300));
-
-    let data: any;
-    try {
-      data = JSON.parse(rawText);
-    } catch {
-      console.error("Non-JSON from OpenRouter:", rawText.slice(0, 200));
-      return NextResponse.json(
-        { error: "AI returned invalid response" },
-        { status: 500 },
-      );
+    if (!parsed) {
+      return NextResponse.json(fallback());
     }
 
-    if (!res.ok || data.error) {
-      console.error("OpenRouter error:", data.error);
-      return NextResponse.json(
-        { error: data?.error?.message || "AI request failed" },
-        { status: 500 },
-      );
-    }
+    return NextResponse.json(parsed);
 
-    const text = data?.choices?.[0]?.message?.content?.trim() ?? "";
-
-    if (!text) {
-      return NextResponse.json({ error: "Empty AI response" }, { status: 500 });
-    }
-
-    return NextResponse.json({ text });
   } catch (err) {
-    console.error("AI route error:", err);
-    return NextResponse.json(
-      { error: "AI failed. Please try again." },
-      { status: 500 },
-    );
+    console.error("SERVER ERROR:", err);
+    return NextResponse.json(fallback());
   }
 }

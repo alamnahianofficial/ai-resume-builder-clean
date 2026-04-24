@@ -44,15 +44,15 @@ export async function POST(req: NextRequest) {
 
     await browser.close();
 
-    return new NextResponse(pdf, {
+    return new NextResponse(new Uint8Array(pdf), {  // ← only change
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": 'attachment; filename="resume.pdf"',
       },
     });
+
   } catch (err: any) {
     console.error("PDF ERROR FULL:", err);
-
     return NextResponse.json(
       { error: err.message || "PDF failed" },
       { status: 500 }

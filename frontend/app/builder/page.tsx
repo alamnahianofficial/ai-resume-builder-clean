@@ -332,7 +332,7 @@ async function generateCVWithAI(
     const res = await fetch("/api/ai", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt: brief.slice(0, 800) }),
+      body: JSON.stringify({ prompt: brief.slice(0, 1000) }),
     });
 
     setStatus("Parsing response…");

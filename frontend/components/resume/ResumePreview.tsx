@@ -1,77 +1,39 @@
 "use client";
 
 import { useResumeStore } from "@/store/useResumeStore";
-import { useState } from "react";
 
 export default function ResumePreview() {
   const { personal, education, experience } = useResumeStore();
-  const [exporting, setExporting] = useState(false);
 
-  const handleDownload = async () => {
-    const element = document.getElementById("resume");
-    if (!element) return;
-
-    setExporting(true);
-
-    try {
-      // ✅ Safe dynamic imports (fix Vercel issues)
-      const html2canvas = (await import("html2canvas")).default;
-      const jsPDF = (await import("jspdf")).jsPDF;
-
-      // ✅ Wait for DOM render (VERY IMPORTANT on Vercel)
-      await new Promise((resolve) => setTimeout(resolve, 300));
-
-      const canvas = await html2canvas(element, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: "#ffffff",
-        scrollY: -window.scrollY,
-      });
-
-      const imgData = canvas.toDataURL("image/png");
-
-      const pdf = new jsPDF("p", "mm", "a4");
-
-      const pageWidth = 210;
-      const pageHeight = 297;
-
-      const imgWidth = pageWidth;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-
-      let position = 0;
-      let remainingHeight = imgHeight;
-
-      // First page
-      pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
-      remainingHeight -= pageHeight;
-
-      // Multi-page support
-      while (remainingHeight > 0) {
-        position -= pageHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
-        remainingHeight -= pageHeight;
-      }
-
-      pdf.save("resume.pdf");
-    } catch (err) {
-      console.error("PDF ERROR:", err);
-      alert("PDF export failed — check console");
-    } finally {
-      setExporting(false);
-    }
+  const handleDocxDownload = () => {
+    alert("DOCX export coming soon (you can implement using docx library)");
   };
 
   return (
     <div className="space-y-6">
-      {/* DOWNLOAD BUTTON */}
-      <button
-        onClick={handleDownload}
-        disabled={exporting}
-        className="bg-black text-white px-4 py-2 rounded disabled:opacity-50"
-      >
-        {exporting ? "Generating PDF..." : "Download PDF"}
-      </button>
+      {/* WARNING MESSAGE */}
+      <div className="bg-yellow-100 text-yellow-800 px-4 py-2 rounded text-sm">
+        ⚠️ PDF export is temporarily unavailable. Please use DOCX export instead.
+      </div>
+
+      {/* BUTTONS */}
+      <div className="flex gap-3">
+        {/* DISABLED PDF BUTTON */}
+        <button
+          disabled
+          className="bg-gray-400 text-white px-4 py-2 rounded cursor-not-allowed"
+        >
+          PDF (Coming Soon)
+        </button>
+
+        {/* DOCX BUTTON */}
+        <button
+          onClick={handleDocxDownload}
+          className="bg-black text-white px-4 py-2 rounded"
+        >
+          Download DOCX
+        </button>
+      </div>
 
       {/* RESUME PREVIEW */}
       <div className="flex justify-center">
@@ -79,8 +41,8 @@ export default function ResumePreview() {
           id="resume"
           className="bg-white text-black p-8 shadow text-sm"
           style={{
-            width: "794px",       // A4 width
-            minHeight: "1123px",  // A4 height
+            width: "794px",
+            minHeight: "1123px",
           }}
         >
           {/* HEADER */}

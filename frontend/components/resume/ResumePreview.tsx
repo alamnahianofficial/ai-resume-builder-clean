@@ -23,16 +23,13 @@ export default function ResumePreview() {
 
       const imgData = canvas.toDataURL("image/png");
       const pdf = new jsPDF("p", "mm", "a4");
-
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
       const imgWidth = pageWidth;
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
 
-      // Handle multi-page if content is taller than one A4 page
       let heightLeft = imgHeight;
       let position = 0;
-
       pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
       heightLeft -= pageHeight;
 
@@ -66,7 +63,6 @@ export default function ResumePreview() {
         id="resume"
         className="bg-white text-black p-8 shadow max-w-3xl mx-auto text-sm"
       >
-        {/* HEADER */}
         <div className="mb-6 break-words">
           <h1 className="text-xl font-bold break-words">
             {personal.name || "Your Name"}
@@ -76,7 +72,6 @@ export default function ResumePreview() {
           </p>
         </div>
 
-        {/* EDUCATION */}
         <div className="mb-6">
           <h2 className="font-bold border-b pb-1 mb-2">Education</h2>
           {education.map((edu, index) => (
@@ -89,14 +84,11 @@ export default function ResumePreview() {
                   {edu.year || ""}
                 </div>
               </div>
-              <p className="text-gray-600 break-words">
-                {edu.school || ""}
-              </p>
+              <p className="text-gray-600 break-words">{edu.school || ""}</p>
             </div>
           ))}
         </div>
 
-        {/* EXPERIENCE */}
         <div>
           <h2 className="font-bold border-b pb-1 mb-2">Experience</h2>
           {experience.map((exp, index) => (
@@ -109,42 +101,12 @@ export default function ResumePreview() {
                   {exp.duration || ""}
                 </div>
               </div>
-              <p className="text-gray-600 break-words">
-                {exp.company || ""}
-              </p>
-              <p className="mt-1 break-words">
-                {exp.description || ""}
-              </p>
+              <p className="text-gray-600 break-words">{exp.company || ""}</p>
+              <p className="mt-1 break-words">{exp.description || ""}</p>
             </div>
           ))}
         </div>
       </div>
     </div>
-
-    {/* Hidden full-scale element for PDF rendering */}
-        <div
-          style={{
-            position: "absolute",
-            left: "-9999px",
-            top: 0,
-            width: 794,
-            background: "white",
-            zIndex: -1,
-          }}
-        >
-          <div id="pdf-render-target">
-            <StandardCV
-              data={resume}
-              photo={photo}
-              previewRef={previewRef as React.RefObject<HTMLDivElement>}
-            />
-          </div>
-        </div>
-
-      </div>
-    </div>
-  </>
-  );
-}
   );
 }

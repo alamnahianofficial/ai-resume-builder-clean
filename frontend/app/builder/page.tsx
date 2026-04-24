@@ -536,7 +536,9 @@ export default function Builder() {
       const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
       const PW = 210, PH = 297;
       const pxPerMm = canvas.width / PW;
-      const pageHpx = Math.round(PH * pxPerMm);
+      const margin = 10;
+      const usableHeightMm = PH - margin * 2;
+      const pageHpx = Math.round(usableHeightMm * pxPerMm);
       const pages = Math.ceil(canvas.height / pageHpx);
 
       for (let p = 0; p < pages; p++) {
@@ -548,7 +550,14 @@ export default function Builder() {
         ctx.fillStyle = "#fff";
         ctx.fillRect(0, 0, slice.width, slice.height);
         ctx.drawImage(canvas, 0, -(p * pageHpx));
-        pdf.addImage(slice.toDataURL("image/jpeg", 0.97), "JPEG", 0, 0, PW, PH);
+        pdf.addImage(
+  slice.toDataURL("image/jpeg", 0.97),
+  "JPEG",
+  margin,
+  margin,
+  PW - margin * 2,
+  PH - margin * 2
+);
       }
       pdf.save(`${resume.full_name || "Resume"}_CV.pdf`);
     } catch (err) {

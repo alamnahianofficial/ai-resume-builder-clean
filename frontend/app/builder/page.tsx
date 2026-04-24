@@ -43,10 +43,10 @@ const initResume = (): ResumeData => ({
 
 const FONT = "'Times New Roman', Times, serif";
 
-// ─── buildPDFHtml (Full Implementation) ──────────────────────────────────────
+// ─── buildPDFHtml (Fixed for Durations & Page Breaks) ────────────────────────
 function buildPDFHtml(data: ResumeData, photo: string | null): string {
   const F = FONT;
-  const contacts = [data.email, data.phone, data.location].filter(Boolean).join("  |  ");
+  const rowStyle = "display:flex; justify-content:space-between; align-items:baseline; width:100%;";
   
   const ST = (t: string) => `
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;page-break-after:avoid;">
@@ -58,40 +58,55 @@ function buildPDFHtml(data: ResumeData, photo: string | null): string {
     const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
     if (!lines.length) return "";
     return `<ul style="margin:2px 0 8px 18px;padding:0;list-style-type:disc;">
-      ${lines.map(l => `<li style="font-family:${F};font-size:10pt;line-height:1.5;margin-bottom:2px;">${l}</li>`).join("")}
+      ${lines.map(l => `<li style="font-family:${F};font-size:10pt;line-height:1.5;margin-bottom:2px;word-break:break-word;">${l}</li>`).join("")}
     </ul>`;
   };
 
   const eduHTML = data.education.filter(e => e.institution).map(e => `
     <div style="margin-bottom:10px;page-break-inside:avoid;">
-      <div style="display:flex;justify-content:space-between;font-weight:bold;font-size:10.5pt;"><span>${e.institution}</span><span>${e.duration}</span></div>
-      <div style="display:flex;justify-content:space-between;font-size:10pt;font-style:italic;"><span>${e.degree}</span><span>${e.cgpa ? 'CGPA: '+e.cgpa : ''}</span></div>
+      <div style="${rowStyle}">
+        <span style="font-weight:bold;font-size:10.5pt;flex:1;">${e.institution}</span>
+        <span style="font-weight:bold;font-size:10pt;white-space:nowrap;margin-left:15px;">${e.duration}</span>
+      </div>
+      <div style="${rowStyle}">
+        <span style="font-style:italic;font-size:10pt;">${e.degree}</span>
+        ${e.cgpa ? `<span style="font-size:10pt;">CGPA: <b>${e.cgpa}</b></span>` : ""}
+      </div>
     </div>`).join("");
 
   const expHTML = data.experience.filter(e => e.role).map(e => `
     <div style="margin-bottom:12px;page-break-inside:avoid;">
-      <div style="display:flex;justify-content:space-between;font-weight:bold;font-size:10.5pt;"><span>${e.role}</span><span>${e.duration}</span></div>
+      <div style="${rowStyle}">
+        <span style="font-weight:bold;font-size:10.5pt;flex:1;">${e.role}</span>
+        <span style="font-weight:bold;font-size:10pt;white-space:nowrap;margin-left:15px;">${e.duration}</span>
+      </div>
       <div style="font-size:10pt;color:#333;margin-bottom:2px;">${e.org}</div>
       ${BL(e.bullets)}
+    </div>`).join("");
+
+  const extraHTML = data.extras.filter(ex => ex.label).map(ex => `
+    <div style="${rowStyle} margin-bottom:4px; font-size:10pt;">
+      <span style="font-weight:bold; flex-shrink:0; width:140px;">${ex.label}:</span>
+      <span style="flex:1; text-align:left;">${ex.value}</span>
     </div>`).join("");
 
   return `<!DOCTYPE html><html><head><style>* { box-sizing: border-box; } body { background:white; margin:0; padding:0; }</style></head><body>
     <div id="cv-root" style="width:794px;padding:70px 80px;background:white;color:black;font-family:${F};">
       <div style="text-align:center;border-bottom:2.5px solid #000;padding-bottom:12px;margin-bottom:20px;">
         <h1 style="font-size:26pt;font-weight:bold;text-transform:uppercase;margin:0 0 5px 0;">${data.full_name || "YOUR NAME"}</h1>
-        <div style="font-size:10pt;line-height:1.6;">${contacts}</div>
+        <div style="font-size:10pt;">${[data.email, data.phone, data.location].filter(Boolean).join("  |  ")}</div>
       </div>
       ${data.summary ? `<div style="margin-bottom:18px;">${ST("Professional Profile")}<p style="font-size:10.5pt;line-height:1.6;text-align:justify;margin:0;">${data.summary}</p></div>` : ""}
       ${eduHTML ? `<div style="margin-bottom:18px;">${ST("Education")}${eduHTML}</div>` : ""}
       ${expHTML ? `<div style="margin-bottom:18px;">${ST("Work Experience")}${expHTML}</div>` : ""}
+      ${extraHTML ? `<div style="margin-bottom:18px;">${ST("Additional Information")}${extraHTML}</div>` : ""}
       <div style="height:60px;"></div>
     </div></body></html>`;
 }
 
-// ─── MAIN BUILDER COMPONENT ──────────────────────────────────────────────────
+// ─── MAIN BUILDER ────────────────────────────────────────────────────────────
 export default function Builder() {
   const [exportingPDF, setExportingPDF] = useState(false);
-  const [aiLoading, setAiLoading] = useState<string | null>(null);
   const [resume, setResume] = useState<ResumeData>(initResume);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [photo, setPhoto] = useState<string | null>(null);
@@ -99,23 +114,19 @@ export default function Builder() {
   const toggleSection = (key: string) => setCollapsed(p => ({ ...p, [key]: !p[key] }));
   const setField = (f: keyof ResumeData, v: string) => setResume(p => ({ ...p, [f]: v }));
 
-  // Dynamic Item Helpers
-  function makeU<T extends { id: number }>(key: keyof ResumeData, blank: () => T) {
-    return {
-      add: () => setResume(p => ({ ...p, [key]: [...(p[key] as T[]), blank()] })),
-      remove: (id: number) => setResume(p => ({ ...p, [key]: (p[key] as T[]).filter(x => x.id !== id) })),
-      upd: (id: number, f: keyof T, v: string) => setResume(p => ({
-        ...p, [key]: (p[key] as T[]).map(x => x.id === id ? { ...x, [f]: v } : x)
-      })),
-    };
-  }
+  const makeU = <T extends { id: number }>(key: keyof ResumeData, blank: () => T) => ({
+    add: () => setResume(p => ({ ...p, [key]: [...(p[key] as T[]), blank()] })),
+    remove: (id: number) => setResume(p => ({ ...p, [key]: (p[key] as T[]).filter(x => x.id !== id) })),
+    upd: (id: number, f: keyof T, v: string) => setResume(p => ({
+      ...p, [key]: (p[key] as T[]).map(x => x.id === id ? { ...x, [f]: v } : x)
+    })),
+  });
 
   const edu = makeU<EduEntry>("education", blankEdu);
   const exp = makeU<ExpEntry>("experience", blankExp);
-  const proj = makeU<ProjectEntry>("projects", blankProj);
-  const skill = makeU<SkillEntry>("skills", blankSkill);
+  const extra = makeU<ExtraEntry>("extras", blankExtra);
 
-  // ─── PDF EXPORT LOGIC ──────────────────────────────────────────────────────
+  // ─── EXPORT PDF (With Multi-Page Masking) ──────────────────────────────────
   const exportPDF = async () => {
     setExportingPDF(true);
     let container: HTMLDivElement | null = null;
@@ -137,19 +148,22 @@ export default function Builder() {
       const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
       const PAGE_W = 210;
       const PAGE_H = 297;
-      const MARGIN = 12; 
-      const USEABLE_H = PAGE_H - (MARGIN * 2);
+      const MARGIN_V = 15; // Vertical Margin
+      const MARGIN_H = 10; // Horizontal Margin
+      const USEABLE_H = PAGE_H - (MARGIN_V * 2);
 
-      const imgW = PAGE_W;
+      const imgW = PAGE_W - (MARGIN_H * 2);
       const imgH = (canvas.height / canvas.width) * imgW;
       const totalPages = Math.ceil(imgH / USEABLE_H);
 
       for (let p = 0; p < totalPages; p++) {
         if (p > 0) pdf.addPage();
-        pdf.addImage(canvas.toDataURL("image/jpeg", 1.0), "JPEG", 0, -(p * USEABLE_H) + MARGIN, imgW, imgH);
+        pdf.addImage(canvas.toDataURL("image/jpeg", 1.0), "JPEG", MARGIN_H, -(p * USEABLE_H) + MARGIN_V, imgW, imgH);
+        
+        // Masks for clean page breaks
         pdf.setFillColor(255, 255, 255);
-        pdf.rect(0, 0, PAGE_W, MARGIN, 'F'); 
-        pdf.rect(0, PAGE_H - MARGIN, PAGE_W, MARGIN, 'F');
+        pdf.rect(0, 0, PAGE_W, MARGIN_V, 'F'); 
+        pdf.rect(0, PAGE_H - MARGIN_V, PAGE_W, PAGE_H, 'F');
       }
 
       pdf.save(`${resume.full_name || "Resume"}_CV.pdf`);
@@ -166,23 +180,22 @@ export default function Builder() {
         {exportingPDF && (
           <motion.div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center">
             <Loader2 className="w-12 h-12 text-blue-500 animate-spin" />
+            <p className="ml-4 font-bold text-xs tracking-widest uppercase animate-pulse">Generating PDF...</p>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* EDITOR */}
       <div className="w-full lg:w-1/2 p-6 overflow-y-auto max-h-screen scrollbar-hide border-r border-white/5">
-        <header className="flex justify-between items-center mb-6">
+        <header className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-black text-blue-500 italic">CV DADA</h1>
-          <button onClick={exportPDF} className="abtn bg-blue-600 hover:bg-blue-500 rounded-xl px-6 py-2 flex items-center gap-2">
-            <Download size={16}/> Export PDF
+          <button onClick={exportPDF} className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded-xl font-bold flex items-center gap-2 transition-all">
+            <Download size={18}/> PDF
           </button>
         </header>
 
         <div className="space-y-4">
-          {/* PERSONAL INFO */}
           <section className="sec-box">
-            <button onClick={() => toggleSection('personal')} className="w-full flex justify-between items-center text-xs font-bold uppercase text-slate-500 tracking-widest">
+            <button onClick={() => toggleSection('personal')} className="w-full flex justify-between font-bold text-xs text-slate-500 uppercase tracking-widest">
               1. Personal Details {collapsed['personal'] ? <ChevronDown size={14}/> : <ChevronUp size={14}/>}
             </button>
             {!collapsed['personal'] && (
@@ -194,34 +207,48 @@ export default function Builder() {
             )}
           </section>
 
-          {/* EXPERIENCE LOOP */}
           <section className="sec-box">
-            <button onClick={() => toggleSection('exp')} className="w-full flex justify-between items-center text-xs font-bold uppercase text-slate-500 tracking-widest">
+            <button onClick={() => toggleSection('exp')} className="w-full flex justify-between font-bold text-xs text-slate-500 uppercase tracking-widest">
               4. Experience {collapsed['exp'] ? <ChevronDown size={14}/> : <ChevronUp size={14}/>}
             </button>
             {!collapsed['exp'] && (
-              <div className="mt-4 space-y-6">
+              <div className="mt-4 space-y-4">
                 {resume.experience.map((e, i) => (
-                  <div key={e.id} className="space-y-3 relative">
-                    <div className="flex justify-between items-center">
-                      <span className="text-[10px] text-blue-400 font-bold">Job #${i+1}</span>
-                      {i > 0 && <button onClick={() => exp.remove(e.id)} className="text-red-500"><Trash2 size={14}/></button>}
+                  <div key={e.id} className="space-y-2 border-b border-white/5 pb-4">
+                    <div className="flex justify-between">
+                      <input className="di text-xs font-bold text-blue-400" placeholder="Job Title" value={e.role} onChange={ev => exp.upd(e.id, 'role', ev.target.value)} />
+                      <input className="di text-xs w-32 text-right" placeholder="Duration" value={e.duration} onChange={ev => exp.upd(e.id, 'duration', ev.target.value)} />
                     </div>
-                    <input className="di text-xs" placeholder="Job Title" value={e.role} onChange={ev => exp.upd(e.id, 'role', ev.target.value)} />
                     <input className="di text-xs" placeholder="Company" value={e.org} onChange={ev => exp.upd(e.id, 'org', ev.target.value)} />
-                    <textarea className="di text-xs h-24" placeholder="Bullet points (one per line)" value={e.bullets} onChange={ev => exp.upd(e.id, 'bullets', ev.target.value)} />
+                    <textarea className="di text-xs h-20" placeholder="Bullet points..." value={e.bullets} onChange={ev => exp.upd(e.id, 'bullets', ev.target.value)} />
+                    <button onClick={() => exp.remove(e.id)} className="text-red-500 text-[10px] font-bold">REMOVE</button>
                   </div>
                 ))}
-                <button onClick={exp.add} className="add-btn w-full py-2 border border-dashed border-slate-700 rounded-lg text-slate-500 hover:text-blue-400 transition-colors">
-                  + Add Experience
-                </button>
+                <button onClick={exp.add} className="add-btn">+ Add Job</button>
+              </div>
+            )}
+          </section>
+
+          <section className="sec-box">
+            <button onClick={() => toggleSection('extra')} className="w-full flex justify-between font-bold text-xs text-slate-500 uppercase tracking-widest">
+              9. Additional Info {collapsed['extra'] ? <ChevronDown size={14}/> : <ChevronUp size={14}/>}
+            </button>
+            {!collapsed['extra'] && (
+              <div className="mt-4 space-y-2">
+                {resume.extras.map((ex) => (
+                  <div key={ex.id} className="flex gap-2">
+                    <input className="di text-xs w-1/3" placeholder="Label (e.g. Languages)" value={ex.label} onChange={ev => extra.upd(ex.id, 'label', ev.target.value)} />
+                    <input className="di text-xs flex-1" placeholder="Value" value={ex.value} onChange={ev => extra.upd(ex.id, 'value', ev.target.value)} />
+                    <button onClick={() => extra.remove(ex.id)}><Trash2 size={14} className="text-slate-600"/></button>
+                  </div>
+                ))}
+                <button onClick={extra.add} className="add-btn">+ Add Row</button>
               </div>
             )}
           </section>
         </div>
       </div>
 
-      {/* PREVIEW */}
       <div className="hidden lg:flex w-1/2 bg-[#010413] justify-center p-12 overflow-y-auto">
         <div className="scale-[0.8] origin-top">
           <StandardCV data={resume} photo={photo} />

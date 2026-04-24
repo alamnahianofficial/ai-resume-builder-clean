@@ -112,7 +112,14 @@ function buildPDFHtml(data: ResumeData, photo: string | null): string {
       ? `<ul style="margin:3px 0 0 18px;padding:0;list-style-type:disc">${lines
           .map(
             (l) =>
-              `<li style="font-family:${F};font-size:10pt;line-height:1.6;margin-bottom:2px">${l}</li>`,
+              `<li style="
+  font-family:${F};
+  font-size:10pt;
+  line-height:1.6;
+  margin-bottom:2px;
+  word-break:break-word;
+  overflow-wrap:break-word;
+">${l}</li>`,
           )
           .join("")}</ul>`
       : "";

@@ -566,25 +566,20 @@ export default function Builder() {
 
       const imgData = canvas.toDataURL("image/jpeg", 0.95);
 
-      let remainingMM = imgH_mm;
-      let imageTop    = MARGIN_MM;
-
-      while (remainingMM > 0) {
+      // Multi-page slicing:
+      // On page N (0-indexed), we shift the full image upward by N*printH
+      // so the correct slice aligns to the top margin. jsPDF clips the rest.
+      const totalPages = Math.ceil(imgH_mm / printH);
+      for (let pageIndex = 0; pageIndex < totalPages; pageIndex++) {
+        if (pageIndex > 0) pdf.addPage();
         pdf.addImage(
           imgData,
           "JPEG",
-          MARGIN_MM,
-          imageTop,
-          imgW_mm,
-          imgH_mm,
+          MARGIN_MM,                          // X — left margin
+          MARGIN_MM - pageIndex * printH,     // Y — shift up each page
+          imgW_mm,                            // width
+          imgH_mm,                            // full image height (clipped by jsPDF)
         );
-
-        remainingMM -= printH;
-
-        if (remainingMM > 0) {
-          pdf.addPage();
-          imageTop = MARGIN_MM - (imgH_mm - remainingMM);
-        }
       }
 
       pdf.save((resume.full_name || "Resume") + "_CV.pdf");

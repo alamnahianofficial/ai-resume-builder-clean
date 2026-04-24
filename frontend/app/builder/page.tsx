@@ -1779,6 +1779,31 @@ const exportPDF = async () => {
           </div>
         </div>
       </div>
+      {/* Hidden full-scale element for PDF rendering */}
+        <div
+          style={{
+            position: "absolute",
+            left: "-9999px",
+            top: 0,
+            width: 794,
+            background: "white",
+            zIndex: -1,
+          }}
+        >
+          <div id="pdf-render-target">
+            <StandardCV
+              data={resume}
+              photo={photo}
+              previewRef={previewRef as React.RefObject<HTMLDivElement>}
+            />
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </>
+  );
+}
     </>
   );
 }

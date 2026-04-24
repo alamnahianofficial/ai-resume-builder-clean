@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
 
     await browser.close();
 
-    return new NextResponse(new Uint8Array(pdf), {  // ← only change
+    return new NextResponse(new Uint8Array(pdf), {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": 'attachment; filename="resume.pdf"',

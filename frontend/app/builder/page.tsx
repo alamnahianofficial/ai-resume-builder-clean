@@ -280,7 +280,15 @@ function buildPDFHtml(data: ResumeData, photo: string | null): string {
   return `<!DOCTYPE html><html><head><meta charset="utf-8">
     <style>* { box-sizing:border-box; margin:0; padding:0; } body { background:white; }</style>
   </head><body>
-    <div id="cv-root" style="width:794px;padding:53px 68px 60px 68px;background:white;font-family:${F};color:#000">
+    <div id="cv-root" style="
+  width:794px;
+  min-height:1123px;
+  padding:96px;
+  background:white;
+  font-family:${F};
+  color:#000;
+  box-sizing:border-box;
+">
       <div style="display:flex;justify-content:${hasPhoto ? "space-between" : "center"};align-items:flex-start;
                   border-bottom:2.5px solid #000;padding-bottom:12px;margin-bottom:14px;gap:14px">
         <div style="flex:${hasPhoto ? "1" : "unset"};text-align:${hasPhoto ? "left" : "center"}">

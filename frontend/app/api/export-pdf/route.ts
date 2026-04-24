@@ -1,3 +1,5 @@
+// frontend/app/api/export-pdf/route.ts
+
 import puppeteer from "puppeteer-core";
 import chromium from "@sparticuz/chromium";
 import { NextRequest, NextResponse } from "next/server";
@@ -20,30 +22,18 @@ export async function POST(req: NextRequest) {
 
     const page = await browser.newPage();
 
-    await page.setViewport({
-      width: 794,
-      height: 1123,
-      deviceScaleFactor: 2,
-    });
-
     await page.setContent(html, {
       waitUntil: "networkidle0",
-      timeout: 30000,
     });
 
     const pdf = await page.pdf({
       format: "A4",
       printBackground: true,
-      margin: {
-        top: "20mm",
-        bottom: "20mm",
-        left: "15mm",
-        right: "15mm",
-      },
     });
 
     await browser.close();
 
+    // 🔥 FIX IS HERE
     return new NextResponse(new Uint8Array(pdf), {
       headers: {
         "Content-Type": "application/pdf",
@@ -52,7 +42,8 @@ export async function POST(req: NextRequest) {
     });
 
   } catch (err: any) {
-    console.error("PDF ERROR FULL:", err);
+    console.error("PDF ERROR:", err);
+
     return NextResponse.json(
       { error: err.message || "PDF failed" },
       { status: 500 }

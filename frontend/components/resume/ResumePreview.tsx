@@ -9,22 +9,34 @@ export default function ResumePreview() {
     const element = document.getElementById("resume");
     if (!element) return;
 
-    const html2pdf = (await import("html2pdf.js")).default;
+    try {
+      const html = element.outerHTML;
 
-    html2pdf()
-      .from(element)
-      .set({
-        margin: 10,
-        filename: "resume.pdf",
-        html2canvas: { scale: 2 },
-        jsPDF: { format: "a4", orientation: "portrait" },
-      })
-      .save();
+      const res = await fetch("/api/export-pdf", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ html }),
+      });
+
+      if (!res.ok) throw new Error("PDF failed");
+
+      const blob = await res.blob();
+
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "resume.pdf";
+      a.click();
+    } catch (err) {
+      console.error(err);
+      alert("PDF export failed");
+    }
   };
 
   return (
     <div className="space-y-6">
-      {/* DOWNLOAD BUTTON */}
       <button
         onClick={handleDownload}
         className="bg-black text-white px-4 py-2 rounded"
@@ -32,20 +44,19 @@ export default function ResumePreview() {
         Download PDF
       </button>
 
-      {/* RESUME CONTENT */}
       <div
         id="resume"
         className="bg-white text-black p-8 shadow max-w-3xl mx-auto"
       >
-        {/* HEADER */}
         <div className="mb-6">
-          <h1 className="text-2xl font-bold">{personal.name || "Your Name"}</h1>
+          <h1 className="text-2xl font-bold">
+            {personal.name || "Your Name"}
+          </h1>
           <p className="text-sm text-gray-600">
             {personal.email || "email@example.com"}
           </p>
         </div>
 
-        {/* EDUCATION */}
         <div className="mb-6">
           <h2 className="font-bold border-b pb-1 mb-2">Education</h2>
 
@@ -59,7 +70,6 @@ export default function ResumePreview() {
           ))}
         </div>
 
-        {/* EXPERIENCE */}
         <div>
           <h2 className="font-bold border-b pb-1 mb-2">Experience</h2>
 
@@ -67,7 +77,9 @@ export default function ResumePreview() {
             <div key={index} className="mb-3">
               <p className="font-semibold">{exp.role || "Role"}</p>
               <p className="text-sm text-gray-600">{exp.company}</p>
-              <p className="text-sm mt-1">{exp.description || "Description"}</p>
+              <p className="text-sm mt-1">
+                {exp.description || "Description"}
+              </p>
             </div>
           ))}
         </div>

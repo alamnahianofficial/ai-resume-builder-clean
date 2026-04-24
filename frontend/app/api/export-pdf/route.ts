@@ -2,17 +2,19 @@ import puppeteer from "puppeteer-core";
 import chromium from "@sparticuz/chromium";
 import { NextRequest, NextResponse } from "next/server";
 
-export const runtime = "nodejs"; // 🔥 REQUIRED
+export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
   try {
     const { html } = await req.json();
 
-    const executablePath = await chromium.executablePath();
-
     const browser = await puppeteer.launch({
-      args: chromium.args,
-      executablePath,
+      args: [
+        ...chromium.args,
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+      ],
+      executablePath: await chromium.executablePath(),
       headless: true,
     });
 
@@ -49,7 +51,7 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (err: any) {
-    console.error("PDF ERROR:", err);
+    console.error("PDF ERROR FULL:", err);
 
     return NextResponse.json(
       { error: err.message || "PDF failed" },

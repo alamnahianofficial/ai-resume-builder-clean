@@ -6,10 +6,8 @@ export async function POST(req: NextRequest) {
   try {
     const { html } = await req.json();
 
-    const executablePath =
-      process.env.NODE_ENV === "production"
-        ? await chromium.executablePath()
-        : undefined;
+    // Ensure executable path ALWAYS resolves
+    const executablePath = await chromium.executablePath();
 
     const browser = await puppeteer.launch({
       args: chromium.args,
@@ -19,12 +17,28 @@ export async function POST(req: NextRequest) {
 
     const page = await browser.newPage();
 
-    await page.setContent(html, { waitUntil: "networkidle0" });
+    // Set viewport (important for layout stability)
+    await page.setViewport({
+      width: 794,
+      height: 1123,
+      deviceScaleFactor: 2,
+    });
+
+    // Load HTML safely
+    await page.setContent(html, {
+      waitUntil: "networkidle0",
+      timeout: 30000,
+    });
 
     const pdf = await page.pdf({
       format: "A4",
       printBackground: true,
-      margin: { top: "15mm", bottom: "15mm", left: "0mm", right: "0mm" },
+      margin: {
+        top: "20mm",
+        bottom: "20mm",
+        left: "15mm",
+        right: "15mm",
+      },
     });
 
     await browser.close();
@@ -35,8 +49,12 @@ export async function POST(req: NextRequest) {
         "Content-Disposition": 'attachment; filename="resume.pdf"',
       },
     });
-  } catch (err) {
+  } catch (err: any) {
     console.error("PDF ERROR:", err);
-    return NextResponse.json({ error: "PDF failed" }, { status: 500 });
+
+    return NextResponse.json(
+      { error: err.message || "PDF failed" },
+      { status: 500 }
+    );
   }
 }

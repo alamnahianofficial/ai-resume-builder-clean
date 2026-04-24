@@ -494,95 +494,118 @@ export default function Builder() {
   };
 
   // ─── PDF EXPORT ──────────────────────────────────────────────────────────
-  const exportPDF = async () => {
-    setExportingPDF(true);
-    try {
-      const [{ jsPDF }, html2canvas] = await Promise.all([
-        import("jspdf"),
-        import("html2canvas").then((m) => m.default),
-      ]);
-      const iframe = document.createElement("iframe");
-      iframe.style.cssText =
-        "position:fixed;top:0;left:-9999px;width:794px;height:1080px;border:none;opacity:0;pointer-events:none;z-index:-1";
-      document.body.appendChild(iframe);
-      const iDoc = iframe.contentDocument!;
-      iDoc.open();
-      iDoc.write(buildPDFHtml(resume, photo));
-      iDoc.close();
+ const exportPDF = async () => {
+  setExportingPDF(true);
+  try {
+    const [{ jsPDF }, html2canvas] = await Promise.all([
+      import("jspdf"),
+      import("html2canvas").then((m) => m.default),
+    ]);
 
-      await Promise.all(
-        Array.from(iDoc.images).map((img) =>
-          img.complete
-            ? Promise.resolve()
-            : new Promise<void>((r) => {
-                img.onload = () => r();
-                img.onerror = () => r();
-              }),
-        ),
+    const iframe = document.createElement("iframe");
+    iframe.style.cssText =
+      "position:fixed;top:0;left:-9999px;width:794px;height:1080px;border:none;opacity:0;pointer-events:none;z-index:-1";
+    document.body.appendChild(iframe);
+
+    const iDoc = iframe.contentDocument!;
+    iDoc.open();
+    iDoc.write(buildPDFHtml(resume, photo));
+    iDoc.close();
+
+    await Promise.all(
+      Array.from(iDoc.images).map((img) =>
+        img.complete
+          ? Promise.resolve()
+          : new Promise<void>((r) => {
+              img.onload = () => r();
+              img.onerror = () => r();
+            })
+      )
+    );
+
+    await new Promise((r) => setTimeout(r, 400));
+
+    const root = iDoc.getElementById("cv-root") as HTMLElement;
+    const totalH = root.scrollHeight;
+
+    iframe.style.height = `${totalH}px`;
+    await new Promise((r) => setTimeout(r, 120));
+
+    const canvas = await html2canvas(root, {
+      scale: 2,
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: "#ffffff",
+      logging: false,
+      width: 794,
+      height: totalH,
+      windowWidth: 794,
+      windowHeight: totalH,
+    });
+
+    document.body.removeChild(iframe);
+
+    const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+
+    const PW = 210;
+    const PH = 297;
+    const margin = 10;
+
+    const pxPerMm = canvas.width / PW;
+    const usableHeightMm = PH - margin * 2;
+    const pageHpx = Math.round(usableHeightMm * pxPerMm);
+
+    const pages = Math.ceil(canvas.height / pageHpx);
+
+    for (let p = 0; p < pages; p++) {
+      if (p > 0) pdf.addPage();
+
+      const slice = document.createElement("canvas");
+      slice.width = canvas.width;
+
+      const sliceHeight =
+        p === pages - 1
+          ? canvas.height - pageHpx * p
+          : pageHpx;
+
+      slice.height = sliceHeight;
+
+      const ctx = slice.getContext("2d")!;
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0, 0, slice.width, slice.height);
+
+      ctx.drawImage(
+        canvas,
+        0,
+        p * pageHpx,
+        canvas.width,
+        sliceHeight,
+        0,
+        0,
+        canvas.width,
+        sliceHeight
       );
-      await new Promise((r) => setTimeout(r, 400));
 
-      const root = iDoc.getElementById("cv-root") as HTMLElement;
-      const totalH = root.scrollHeight;
-      iframe.style.height = `${totalH}px`;
-      await new Promise((r) => setTimeout(r, 120));
+      const heightRatio = sliceHeight / canvas.width;
 
-      const canvas = await html2canvas(root, {
-        scale: 2,
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: "#ffffff",
-        logging: false,
-        width: 794,
-        height: totalH,
-        windowWidth: 794,
-        windowHeight: totalH,
-      });
-      document.body.removeChild(iframe);
-
-      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-      const PW = 210, PH = 297;
-      const pxPerMm = canvas.width / PW;
-      const margin = 10;
-      const usableHeightMm = PH - margin * 2;
-      const pageHpx = Math.round(usableHeightMm * pxPerMm);
-      const pages = Math.ceil(canvas.height / pageHpx);
-
-      for (let p = 0; p < pages; p++) {
-        if (p > 0) pdf.addPage();
-        const slice = document.createElement("canvas");
-        slice.width = canvas.width;
-        slice.height = pageHpx;
-        const ctx = slice.getContext("2d")!;
-        ctx.fillStyle = "#fff";
-        ctx.fillRect(0, 0, slice.width, slice.height);
-        ctx.drawImage(
-  canvas,
-  0,
-  p * pageHpx,
-  canvas.width,
-  pageHpx,
-  0,
-  0,
-  canvas.width,
-  pageHpx
-);
-        pdf.addImage(
-  slice.toDataURL("image/jpeg", 0.97),
-  "JPEG",
-  margin,
-  margin,
-  PW - margin * 2,
-  PH - margin * 2
-);
-      }
-      pdf.save(`${resume.full_name || "Resume"}_CV.pdf`);
-    } catch (err) {
-      console.error("PDF error:", err);
-      alert("PDF export failed — check console.");
+      pdf.addImage(
+        slice.toDataURL("image/jpeg", 0.97),
+        "JPEG",
+        margin,
+        margin,
+        PW - margin * 2,
+        (PW - margin * 2) * heightRatio
+      );
     }
-    setExportingPDF(false);
-  };
+
+    pdf.save(`${resume.full_name || "Resume"}_CV.pdf`);
+  } catch (err) {
+    console.error("PDF error:", err);
+    alert("PDF export failed — check console.");
+  }
+
+  setExportingPDF(false);
+};
 
   // ─── DOCX EXPORT ─────────────────────────────────────────────────────────
   const exportDOCX = async () => {

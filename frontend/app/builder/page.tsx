@@ -494,7 +494,7 @@ export default function Builder() {
   };
 
   // ─── PDF EXPORT ──────────────────────────────────────────────────────────
- const exportPDF = async () => {
+const exportPDF = async () => {
   setExportingPDF(true);
   try {
     const [{ jsPDF }, html2canvas] = await Promise.all([
@@ -502,10 +502,19 @@ export default function Builder() {
       import("html2canvas").then((m) => m.default),
     ]);
 
-    // create hidden iframe
+    // ── 1. Build hidden iframe at exact A4 pixel width ──────────────────
+    const A4_PX_WIDTH = 794;
     const iframe = document.createElement("iframe");
-    iframe.style.cssText =
-      "position:fixed;top:0;left:-9999px;width:794px;height:1123px;border:none;opacity:0;";
+    iframe.style.cssText = [
+      "position:fixed",
+      "top:0",
+      "left:-9999px",
+      `width:${A4_PX_WIDTH}px`,
+      "height:1123px",
+      "border:none",
+      "opacity:0",
+      "pointer-events:none",
+    ].join(";");
     document.body.appendChild(iframe);
 
     const iDoc = iframe.contentDocument!;
@@ -513,61 +522,86 @@ export default function Builder() {
     iDoc.write(buildPDFHtml(resume, photo));
     iDoc.close();
 
-    // wait for render
-    await new Promise((r) => setTimeout(r, 500));
+    // ── 2. Wait for fonts / images to load ──────────────────────────────
+    await new Promise((r) => setTimeout(r, 600));
 
     const root = iDoc.getElementById("cv-root") as HTMLElement;
     const totalHeight = root.scrollHeight;
 
+    // Resize iframe to full content height so nothing is clipped
     iframe.style.height = `${totalHeight}px`;
     await new Promise((r) => setTimeout(r, 200));
 
-    // render canvas
+    // ── 3. Capture with html2canvas ─────────────────────────────────────
     const canvas = await html2canvas(root, {
-      scale: 2,
+      scale: 2,                     // retina quality
       useCORS: true,
+      allowTaint: false,
       backgroundColor: "#ffffff",
-      width: 794,
+      width: A4_PX_WIDTH,
       height: totalHeight,
+      windowWidth: A4_PX_WIDTH,    // 🔑 forces layout to 794px — no reflow
+      windowHeight: totalHeight,
+      scrollX: 0,
+      scrollY: 0,
+      x: 0,
+      y: 0,
     });
 
     document.body.removeChild(iframe);
 
-    // create PDF
-    const pdf = new jsPDF("p", "mm", "a4");
+    // ── 4. PDF dimensions (mm) ───────────────────────────────────────────
+    const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
 
-    const PW = 210;
-    const PH = 297;
-    const margin = 10;
+    const PAGE_W_MM = 210;          // A4 width  in mm
+    const PAGE_H_MM = 297;          // A4 height in mm
+    const MARGIN_MM = 25.4;         // 1 inch in mm
 
-    const imgWidth = PW - margin * 2;
-    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+    const printW = PAGE_W_MM - MARGIN_MM * 2;   // 159.2 mm usable width
+    const printH = PAGE_H_MM - MARGIN_MM * 2;   // 246.2 mm usable height
 
+    // Scale image height proportionally to the usable print width
+    const imgHeightMM = (canvas.height / canvas.width) * printW;
     const imgData = canvas.toDataURL("image/jpeg", 0.95);
 
-    let heightLeft = imgHeight;
-    let position = margin;
+    // ── 5. Multi-page logic ──────────────────────────────────────────────
+    //
+    //  We draw the FULL-height image on every page, but shift it upward
+    //  so that only the correct "slice" is visible within the printable area.
+    //
+    //  Page 1: image top edge sits at MARGIN_MM         → shows rows 0..printH
+    //  Page 2: image top edge sits at MARGIN_MM-printH  → shows rows printH..2*printH
+    //  Page N: image top edge sits at MARGIN_MM-(N-1)*printH
+    //
+    let remainingMM = imgHeightMM;   // how many mm of image content still to place
+    let pageTop = MARGIN_MM;         // Y position of the image's top edge on current page
 
-    // first page
-    pdf.addImage(imgData, "JPEG", margin, position, imgWidth, imgHeight);
-    heightLeft -= PH - margin * 2;
+    while (remainingMM > 0) {
+      pdf.addImage(
+        imgData,
+        "JPEG",
+        MARGIN_MM,   // X — left margin
+        pageTop,     // Y — shifts up on subsequent pages
+        printW,      // width  — exactly fills usable area
+        imgHeightMM, // height — always the FULL image (clipped by page bounds)
+      );
 
-    // extra pages
-    while (heightLeft > 0) {
-      pdf.addPage();
-      position = margin - heightLeft;
+      remainingMM -= printH;
 
-      pdf.addImage(imgData, "JPEG", margin, position, imgWidth, imgHeight);
-      heightLeft -= PH - margin * 2;
+      if (remainingMM > 0) {
+        pdf.addPage();
+        // Shift image up by one printable-height so the next slice shows
+        pageTop = MARGIN_MM - (imgHeightMM - remainingMM);
+      }
     }
 
     pdf.save(`${resume.full_name || "Resume"}_CV.pdf`);
   } catch (err) {
-    console.error("PDF error:", err);
-    alert("PDF export failed");
+    console.error("PDF export error:", err);
+    alert("PDF export failed. Check console for details.");
+  } finally {
+    setExportingPDF(false);
   }
-
-  setExportingPDF(false);
 };
   // ─── DOCX EXPORT ─────────────────────────────────────────────────────────
   const exportDOCX = async () => {

@@ -304,7 +304,7 @@ function buildPDFHtml(data: ResumeData, photo: string | null): string {
     "<style>* { box-sizing:border-box; margin:0; padding:0; } body { background:white; }</style>" +
     "</head><body>" +
     "<div id=\"cv-root\" style=\"" +
-    "width:794px;max-width:794px;min-height:1123px;padding:72px 82px 96px 82px;overflow:hidden;" +
+    "width:794px;max-width:794px;min-height:1123px;padding:72px 82px 96px 82px;overflow:visible;" +
     "background:white;font-family:" + F + ";color:#000;box-sizing:border-box;\">" +
     "<div style=\"display:flex;justify-content:" + headerAlign + ";align-items:flex-start;" +
     "border-bottom:2.5px solid #000;padding-bottom:12px;margin-bottom:14px;gap:14px\">" +
@@ -509,78 +509,101 @@ export default function Builder() {
   // ─── PDF EXPORT ────────────────────────────────────────────────────────────
   const exportPDF = async () => {
     setExportingPDF(true);
+
+    // Container div we will clean up in finally
+    let container: HTMLDivElement | null = null;
+
     try {
       const [{ jsPDF }, html2canvas] = await Promise.all([
         import("jspdf"),
         import("html2canvas").then((m) => m.default),
       ]);
 
-      const A4_W = 794;
-      const iframe = document.createElement("iframe");
-      iframe.style.cssText =
-        "position:fixed;top:0;left:-9999px;width:794px;height:1123px;" +
-        "border:none;opacity:0;pointer-events:none;";
-      document.body.appendChild(iframe);
+      // ── 1. Build a hidden off-screen container div ──────────────────────
+      // We avoid iframes entirely — they create a separate document context
+      // that causes html2canvas to mis-measure scrollWidth/scrollHeight and
+      // lets the browser add scrollbars that bleed into the canvas.
+      //
+      // Instead we append a plain <div> to document.body, render the CV HTML
+      // inside it at exactly 794px wide, measure its natural height, capture
+      // it, then remove it.
+      const A4_PX = 794; // px — matches the cv-root width in buildPDFHtml
 
-      const iDoc = iframe.contentDocument!;
-      iDoc.open();
-      iDoc.write(buildPDFHtml(resume, photo));
-      iDoc.close();
+      container = document.createElement("div");
+      container.style.cssText =
+        "position:fixed;" +
+        "top:0;" +
+        "left:-9999px;" +
+        "width:" + A4_PX + "px;" +
+        "overflow:visible;" +   // let height grow naturally — we measure it below
+        "z-index:-1;" +
+        "pointer-events:none;";
+      container.innerHTML = buildPDFHtml(resume, photo);
+      document.body.appendChild(container);
 
-      await new Promise((r) => setTimeout(r, 600));
+      // Give fonts and images time to load
+      await new Promise((r) => setTimeout(r, 700));
 
-      const root = iDoc.getElementById("cv-root") as HTMLElement;
-      const totalHeight = root.scrollHeight;
+      const root = container.querySelector("#cv-root") as HTMLElement;
+      if (!root) throw new Error("cv-root not found");
 
-      iframe.style.height = totalHeight + "px";
-      await new Promise((r) => setTimeout(r, 200));
+      // Measure the natural rendered height (may be > 1123px for long CVs)
+      const naturalH = root.scrollHeight;
 
+      // ── 2. Capture canvas ───────────────────────────────────────────────
+      // scale:2 gives 2× pixel density (retina quality).
+      // We lock windowWidth to A4_PX so the browser does NOT reflow to the
+      // actual viewport width, which would change line-wrapping and layout.
       const canvas = await html2canvas(root, {
         scale: 2,
         useCORS: true,
         allowTaint: false,
         backgroundColor: "#ffffff",
-        width: A4_W,
-        height: totalHeight,
-        windowWidth: A4_W,
-        windowHeight: totalHeight,
+        width: A4_PX,
+        height: naturalH,
+        windowWidth: A4_PX,
+        windowHeight: naturalH,
         scrollX: 0,
         scrollY: 0,
         x: 0,
         y: 0,
+        onclone: (cloned: Document) => {
+          // Ensure the cloned root is also exactly A4_PX wide and not clipped
+          const el = cloned.getElementById("cv-root");
+          if (el) {
+            el.style.width = A4_PX + "px";
+            el.style.maxWidth = A4_PX + "px";
+            el.style.overflow = "visible";
+          }
+        },
       });
 
-      document.body.removeChild(iframe);
-
+      // ── 3. Build the PDF ─────────────────────────────────────────────────
       const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
 
-      // A4 page dimensions
       const PAGE_W_MM = 210;
       const PAGE_H_MM = 297;
 
-      // The canvas was captured at scale:2, so canvas.width = A4_W * 2 = 1588px.
-      // Map the full canvas width to the full A4 page width (210mm).
-      // The HTML's built-in padding (72px top, 82px sides) becomes the natural margin.
-      // No extra PDF offset is added — that would push content off the right/bottom edges.
+      // canvas.width  = A4_PX * scale = 794 * 2 = 1588 px
+      // canvas.height = naturalH * scale
+      // Map 1588px → 210mm.  Everything scales proportionally.
       const imgW_mm = PAGE_W_MM;
       const imgH_mm = (canvas.height / canvas.width) * imgW_mm;
 
       const imgData = canvas.toDataURL("image/jpeg", 0.97);
 
-      // Multi-page slicing with a small bleed to avoid text being hard-cut at boundaries.
-      // Each page advances by sliceH_mm. The image is shifted up by p * sliceH_mm
-      // so the correct slice is visible. jsPDF clips everything outside the page.
-      const BLEED_MM  = 4;
-      const sliceH_mm = PAGE_H_MM - BLEED_MM;
-      const totalPages = Math.ceil(imgH_mm / sliceH_mm);
-
+      // Slice the single tall image across multiple A4 pages.
+      // On page p (0-indexed) we shift the image UP by p * PAGE_H_MM so the
+      // correct band is visible within the page viewport.
+      // jsPDF clips everything that falls outside the page bounds.
+      const totalPages = Math.ceil(imgH_mm / PAGE_H_MM);
       for (let p = 0; p < totalPages; p++) {
         if (p > 0) pdf.addPage();
         pdf.addImage(
           imgData,
           "JPEG",
-          0,                  // X — flush to left (HTML side padding is the margin)
-          -(p * sliceH_mm),   // Y — shift image up each page
+          0,                    // X — flush left; HTML side-padding acts as margin
+          -(p * PAGE_H_MM),     // Y — shift image up each page
           imgW_mm,
           imgH_mm,
         );
@@ -591,6 +614,10 @@ export default function Builder() {
       console.error("PDF export error:", err);
       alert("PDF export failed. Check console for details.");
     } finally {
+      // Always clean up the container
+      if (container && container.parentNode) {
+        container.parentNode.removeChild(container);
+      }
       setExportingPDF(false);
     }
   };

@@ -499,30 +499,50 @@ export default function Builder() {
     setAiLoading(null);
   };
 
-  // ─── PDF EXPORT (Puppeteer) ─────────────────────────────────────────────────
-  const exportPDF = async () => {
-    setExportingPDF(true);
-    try {
-      const html = buildPDFHtml(resume, photo);
-      const res = await fetch("/api/export-pdf", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ html }),
-      });
-      if (!res.ok) throw new Error("PDF generation failed");
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${resume.full_name || "Resume"}_CV.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      console.error("PDF error:", err);
-      alert("PDF export failed — check console.");
+
+ // ─── PDF EXPORT (client-side) ───────────────────────────────────────────────
+const exportPDF = async () => {
+  setExportingPDF(true);
+  try {
+    const html2canvas = (await import("html2canvas")).default;
+    const jsPDF = (await import("jspdf")).default;
+
+    const element = document.getElementById("pdf-render-target");
+    if (!element) throw new Error("PDF render target not found");
+
+    const canvas = await html2canvas(element, {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: "#ffffff",
+      logging: false,
+    });
+
+    const imgData = canvas.toDataURL("image/png");
+    const pdf = new jsPDF("p", "mm", "a4");
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const imgWidth = pageWidth;
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+    let heightLeft = imgHeight;
+    let position = 0;
+    pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+    heightLeft -= pageHeight;
+
+    while (heightLeft > 0) {
+      position -= pageHeight;
+      pdf.addPage();
+      pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
     }
-    setExportingPDF(false);
-  };
+
+    pdf.save(`${resume.full_name || "Resume"}_CV.pdf`);
+  } catch (err) {
+    console.error("PDF error:", err);
+    alert("PDF export failed — check console.");
+  }
+  setExportingPDF(false);
+};
 
   // ─── DOCX EXPORT ─────────────────────────────────────────────────────────
   const exportDOCX = async () => {

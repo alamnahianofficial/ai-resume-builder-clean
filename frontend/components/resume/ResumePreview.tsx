@@ -14,9 +14,12 @@ export default function ResumePreview() {
     setExporting(true);
 
     try {
-      // ✅ Dynamic imports (Vercel-safe)
+      // ✅ Safe dynamic imports (fix Vercel issues)
       const html2canvas = (await import("html2canvas")).default;
       const jsPDF = (await import("jspdf")).jsPDF;
+
+      // ✅ Wait for DOM render (VERY IMPORTANT on Vercel)
+      await new Promise((resolve) => setTimeout(resolve, 300));
 
       const canvas = await html2canvas(element, {
         scale: 2,
@@ -61,7 +64,7 @@ export default function ResumePreview() {
 
   return (
     <div className="space-y-6">
-      {/* BUTTON */}
+      {/* DOWNLOAD BUTTON */}
       <button
         onClick={handleDownload}
         disabled={exporting}
@@ -70,7 +73,7 @@ export default function ResumePreview() {
         {exporting ? "Generating PDF..." : "Download PDF"}
       </button>
 
-      {/* CENTERED A4 PREVIEW */}
+      {/* RESUME PREVIEW */}
       <div className="flex justify-center">
         <div
           id="resume"

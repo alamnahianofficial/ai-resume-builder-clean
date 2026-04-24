@@ -304,7 +304,7 @@ function buildPDFHtml(data: ResumeData, photo: string | null): string {
     "<style>* { box-sizing:border-box; margin:0; padding:0; } body { background:white; }</style>" +
     "</head><body>" +
     "<div id=\"cv-root\" style=\"" +
-    "width:794px;min-height:1123px;padding:72px 82px 96px 82px;" +
+    "width:794px;max-width:794px;min-height:1123px;padding:72px 82px 96px 82px;overflow:hidden;" +
     "background:white;font-family:" + F + ";color:#000;box-sizing:border-box;\">" +
     "<div style=\"display:flex;justify-content:" + headerAlign + ";align-items:flex-start;" +
     "border-bottom:2.5px solid #000;padding-bottom:12px;margin-bottom:14px;gap:14px\">" +
@@ -554,28 +554,33 @@ export default function Builder() {
 
       const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
 
+      // A4 page dimensions
       const PAGE_W_MM = 210;
       const PAGE_H_MM = 297;
 
-      // No extra PDF margin — the HTML already has 72px top / 82px side padding
-      // which renders as the visual margin inside the canvas. Adding another
-      // PDF margin would double the gap. Stretching edge-to-edge also means the
-      // last page slice fills correctly with no wasted blank space.
+      // The canvas was captured at scale:2, so canvas.width = A4_W * 2 = 1588px.
+      // Map the full canvas width to the full A4 page width (210mm).
+      // The HTML's built-in padding (72px top, 82px sides) becomes the natural margin.
+      // No extra PDF offset is added — that would push content off the right/bottom edges.
       const imgW_mm = PAGE_W_MM;
       const imgH_mm = (canvas.height / canvas.width) * imgW_mm;
 
-      const imgData = canvas.toDataURL("image/jpeg", 0.95);
+      const imgData = canvas.toDataURL("image/jpeg", 0.97);
 
-      // Multi-page slicing: shift the full image up by N * PAGE_H_MM on page N.
-      // jsPDF clips anything outside the page bounds automatically.
-      const totalPages = Math.ceil(imgH_mm / PAGE_H_MM);
-      for (let pageIndex = 0; pageIndex < totalPages; pageIndex++) {
-        if (pageIndex > 0) pdf.addPage();
+      // Multi-page slicing with a small bleed to avoid text being hard-cut at boundaries.
+      // Each page advances by sliceH_mm. The image is shifted up by p * sliceH_mm
+      // so the correct slice is visible. jsPDF clips everything outside the page.
+      const BLEED_MM  = 4;
+      const sliceH_mm = PAGE_H_MM - BLEED_MM;
+      const totalPages = Math.ceil(imgH_mm / sliceH_mm);
+
+      for (let p = 0; p < totalPages; p++) {
+        if (p > 0) pdf.addPage();
         pdf.addImage(
           imgData,
           "JPEG",
-          0,                          // X — flush left (HTML padding is the margin)
-          -(pageIndex * PAGE_H_MM),   // Y — shift image up each page
+          0,                  // X — flush to left (HTML side padding is the margin)
+          -(p * sliceH_mm),   // Y — shift image up each page
           imgW_mm,
           imgH_mm,
         );

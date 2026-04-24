@@ -14,30 +14,38 @@ export default function ResumePreview() {
     if (!element) return;
 
     setExporting(true);
+
     try {
       const canvas = await html2canvas(element, {
         scale: 2,
         useCORS: true,
         backgroundColor: "#ffffff",
+        scrollY: -window.scrollY,
       });
 
       const imgData = canvas.toDataURL("image/png");
+
       const pdf = new jsPDF("p", "mm", "a4");
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
+
+      const pageWidth = 210;
+      const pageHeight = 297;
+
       const imgWidth = pageWidth;
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
 
-      let heightLeft = imgHeight;
       let position = 0;
-      pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
+      let remainingHeight = imgHeight;
 
-      while (heightLeft > 0) {
+      // First page
+      pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+      remainingHeight -= pageHeight;
+
+      // Additional pages
+      while (remainingHeight > 0) {
         position -= pageHeight;
         pdf.addPage();
         pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
-        heightLeft -= pageHeight;
+        remainingHeight -= pageHeight;
       }
 
       pdf.save("resume.pdf");
@@ -59,52 +67,67 @@ export default function ResumePreview() {
         {exporting ? "Generating PDF..." : "Download PDF"}
       </button>
 
-      <div
-        id="resume"
-        className="bg-white text-black p-8 shadow max-w-3xl mx-auto text-sm"
-      >
-        <div className="mb-6 break-words">
-          <h1 className="text-xl font-bold break-words">
-            {personal.name || "Your Name"}
-          </h1>
-          <p className="text-gray-600 break-words">
-            {personal.email || "email@example.com"}
-          </p>
-        </div>
+      <div className="flex justify-center">
+        <div
+          id="resume"
+          className="bg-white text-black p-8 shadow text-sm"
+          style={{
+            width: "794px", // 👈 exact A4 width
+            minHeight: "1123px", // 👈 exact A4 height
+          }}
+        >
+          {/* HEADER */}
+          <div className="mb-6 break-words">
+            <h1 className="text-xl font-bold break-words">
+              {personal.name || "Your Name"}
+            </h1>
+            <p className="text-gray-600 break-words">
+              {personal.email || "email@example.com"}
+            </p>
+          </div>
 
-        <div className="mb-6">
-          <h2 className="font-bold border-b pb-1 mb-2">Education</h2>
-          {education.map((edu, index) => (
-            <div key={index} className="mb-3">
-              <div className="flex justify-between gap-2">
-                <div className="font-semibold break-words">
-                  {edu.degree || "Degree"}
+          {/* EDUCATION */}
+          <div className="mb-6">
+            <h2 className="font-bold border-b pb-1 mb-2">Education</h2>
+            {education.map((edu, index) => (
+              <div key={index} className="mb-3">
+                <div className="flex justify-between gap-2">
+                  <div className="font-semibold break-words">
+                    {edu.degree || "Degree"}
+                  </div>
+                  <div className="text-gray-500 text-xs whitespace-nowrap">
+                    {edu.year || ""}
+                  </div>
                 </div>
-                <div className="text-gray-500 text-xs whitespace-nowrap">
-                  {edu.year || ""}
-                </div>
+                <p className="text-gray-600 break-words">
+                  {edu.school || ""}
+                </p>
               </div>
-              <p className="text-gray-600 break-words">{edu.school || ""}</p>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
 
-        <div>
-          <h2 className="font-bold border-b pb-1 mb-2">Experience</h2>
-          {experience.map((exp, index) => (
-            <div key={index} className="mb-4">
-              <div className="flex justify-between gap-2">
-                <div className="font-semibold break-words">
-                  {exp.role || "Role"}
+          {/* EXPERIENCE */}
+          <div>
+            <h2 className="font-bold border-b pb-1 mb-2">Experience</h2>
+            {experience.map((exp, index) => (
+              <div key={index} className="mb-4">
+                <div className="flex justify-between gap-2">
+                  <div className="font-semibold break-words">
+                    {exp.role || "Role"}
+                  </div>
+                  <div className="text-gray-500 text-xs whitespace-nowrap">
+                    {exp.duration || ""}
+                  </div>
                 </div>
-                <div className="text-gray-500 text-xs whitespace-nowrap">
-                  {exp.duration || ""}
-                </div>
+                <p className="text-gray-600 break-words">
+                  {exp.company || ""}
+                </p>
+                <p className="mt-1 break-words">
+                  {exp.description || ""}
+                </p>
               </div>
-              <p className="text-gray-600 break-words">{exp.company || ""}</p>
-              <p className="mt-1 break-words">{exp.description || ""}</p>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       </div>
     </div>

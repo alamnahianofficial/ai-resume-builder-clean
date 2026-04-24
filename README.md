@@ -6,7 +6,7 @@
 
 ---
 
-## Features
+   ## Features
 
 - **AI CV Builder** — Describe yourself in plain text, AI generates your entire CV instantly
 - **AI Improve** — Rewrite any section (summary, experience, projects) with one click

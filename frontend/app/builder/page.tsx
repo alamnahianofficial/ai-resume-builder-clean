@@ -85,27 +85,25 @@ const initResume = (): ResumeData => ({
 const FONT = "'Times New Roman', Times, serif";
 
 // ─── buildPDFHtml ─────────────────────────────────────────────────────────────
-// FIX: padding changed from uniform 96px to 72px 82px 96px 82px
-//   72px top    = ~0.75in  (tight professional header gap)
-//   82px sides  = ~0.85in  (balanced left/right margin)
-//   96px bottom = ~1.00in  (ensures last-page content never clips)
 function buildPDFHtml(data: ResumeData, photo: string | null): string {
   const F = FONT;
+
   const contacts = [data.email, data.phone, data.location]
     .filter(Boolean)
     .join("  |  ");
+
   const hasPhoto = !!photo;
 
-  const ST = (t: string) => `
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-      <h2 style="font-family:${F};font-size:11pt;font-weight:bold;text-transform:uppercase;
-                 letter-spacing:.07em;margin:0;padding:0;white-space:nowrap;flex-shrink:0">${t}</h2>
-      <div style="flex:1;height:1.5px;background:#000;min-width:0"></div>
-    </div>`;
+  const ST = (t: string) =>
+    "<div style=\"display:flex;align-items:center;gap:8px;margin-bottom:8px\">" +
+    "<h2 style=\"font-family:" + F + ";font-size:11pt;font-weight:bold;text-transform:uppercase;" +
+    "letter-spacing:.07em;margin:0;padding:0;white-space:nowrap;flex-shrink:0\">" + t + "</h2>" +
+    "<div style=\"flex:1;height:1.5px;background:#000;min-width:0\"></div>" +
+    "</div>";
 
   const BD = (t: string) =>
     t
-      ? `<span style="font-family:${F};font-size:10pt;font-weight:bold;white-space:nowrap;flex-shrink:0">${t}</span>`
+      ? "<span style=\"font-family:" + F + ";font-size:10pt;font-weight:bold;white-space:nowrap;flex-shrink:0\">" + t + "</span>"
       : "";
 
   const BL = (text: string) => {
@@ -113,212 +111,223 @@ function buildPDFHtml(data: ResumeData, photo: string | null): string {
       .split("\n")
       .map((l) => l.trim())
       .filter(Boolean);
-    return lines.length
-      ? `<ul style="margin:3px 0 0 18px;padding:0;list-style-type:disc">${lines
-          .map(
-            (l) =>
-              `<li style="
-  font-family:${F};
-  font-size:10pt;
-  line-height:1.6;
-  margin-bottom:2px;
-  word-break:break-word;
-  overflow-wrap:break-word;
-">${l}</li>`,
-          )
-          .join("")}</ul>`
-      : "";
+    if (!lines.length) return "";
+    const items = lines
+      .map(
+        (l) =>
+          "<li style=\"font-family:" + F + ";font-size:10pt;line-height:1.6;margin-bottom:2px;" +
+          "word-break:break-word;overflow-wrap:break-word;\">" + l + "</li>"
+      )
+      .join("");
+    return "<ul style=\"margin:3px 0 0 18px;padding:0;list-style-type:disc\">" + items + "</ul>";
   };
 
-  const socialLines = [
-    data.linkedin &&
-      `<div style="font-family:${F};font-size:9.5pt;margin-top:2px"><b>LinkedIn:</b> <span style="color:#1a56db">${data.linkedin}</span></div>`,
-    data.github &&
-      `<div style="font-family:${F};font-size:9.5pt;margin-top:2px"><b>GitHub:</b> <span style="color:#1a56db">${data.github}</span></div>`,
-    data.portfolio &&
-      `<div style="font-family:${F};font-size:9.5pt;margin-top:2px"><b>Portfolio:</b> <span style="color:#1a56db">${data.portfolio}</span></div>`,
-  ]
-    .filter(Boolean)
-    .join("");
+  const socialLines =
+    (data.linkedin
+      ? "<div style=\"font-family:" + F + ";font-size:9.5pt;margin-top:2px\"><b>LinkedIn:</b> " +
+        "<span style=\"color:#1a56db\">" + data.linkedin + "</span></div>"
+      : "") +
+    (data.github
+      ? "<div style=\"font-family:" + F + ";font-size:9.5pt;margin-top:2px\"><b>GitHub:</b> " +
+        "<span style=\"color:#1a56db\">" + data.github + "</span></div>"
+      : "") +
+    (data.portfolio
+      ? "<div style=\"font-family:" + F + ";font-size:9.5pt;margin-top:2px\"><b>Portfolio:</b> " +
+        "<span style=\"color:#1a56db\">" + data.portfolio + "</span></div>"
+      : "");
 
   const summaryHTML = data.summary
-    ? `
-    <div style="margin-bottom:14px">
-      ${ST("Professional Profile")}
-      <p style="font-family:${F};font-size:10.5pt;line-height:1.7;text-align:justify;margin:0">${data.summary}</p>
-    </div>`
+    ? "<div style=\"margin-bottom:14px\">" +
+      ST("Professional Profile") +
+      "<p style=\"font-family:" + F + ";font-size:10.5pt;line-height:1.7;text-align:justify;margin:0\">" +
+      data.summary + "</p></div>"
     : "";
 
   const eduRows = data.education.filter((e) => e.institution || e.degree);
   const eduHTML = eduRows.length
-    ? `
-    <div style="margin-bottom:14px">
-      ${ST("Education")}
-      ${eduRows
+    ? "<div style=\"margin-bottom:14px\">" +
+      ST("Education") +
+      eduRows
         .map(
-          (e, i) => `
-        <div style="margin-top:${i === 0 ? "0" : "9px"}">
-          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:1px">
-            <span style="font-family:${F};font-size:10.5pt;font-weight:bold">${e.institution}</span>
-            ${BD(e.duration)}
-          </div>
-          <div style="display:flex;justify-content:space-between;align-items:baseline">
-            <span style="font-family:${F};font-size:10pt;font-style:italic;color:#222">${e.degree}</span>
-            ${e.cgpa ? `<span style="font-family:${F};font-size:10pt">CGPA: <b>${e.cgpa}</b></span>` : ""}
-          </div>
-        </div>`,
+          (e, i) =>
+            "<div style=\"margin-top:" + (i === 0 ? "0" : "9px") + "\">" +
+            "<div style=\"display:flex;justify-content:space-between;align-items:baseline;margin-bottom:1px\">" +
+            "<span style=\"font-family:" + F + ";font-size:10.5pt;font-weight:bold\">" + e.institution + "</span>" +
+            BD(e.duration) +
+            "</div>" +
+            "<div style=\"display:flex;justify-content:space-between;align-items:baseline\">" +
+            "<span style=\"font-family:" + F + ";font-size:10pt;font-style:italic;color:#222\">" + e.degree + "</span>" +
+            (e.cgpa
+              ? "<span style=\"font-family:" + F + ";font-size:10pt\">CGPA: <b>" + e.cgpa + "</b></span>"
+              : "") +
+            "</div></div>"
         )
-        .join("")}
-    </div>`
+        .join("") +
+      "</div>"
     : "";
 
   const expRows = data.experience.filter((e) => e.role || e.org);
   const expHTML = expRows.length
-    ? `
-    <div style="margin-bottom:14px">
-      ${ST("Work Experience")}
-      ${expRows
+    ? "<div style=\"margin-bottom:14px\">" +
+      ST("Work Experience") +
+      expRows
         .map(
-          (e, i) => `
-        <div style="margin-top:${i === 0 ? "0" : "10px"}">
-          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:1px">
-            <span style="font-family:${F};font-size:10.5pt;font-weight:bold">${e.role}</span>
-            ${BD(e.duration)}
-          </div>
-          ${e.org ? `<div style="font-family:${F};font-size:10pt;color:#333;margin-bottom:2px">${e.org}</div>` : ""}
-          ${BL(e.bullets)}
-        </div>`,
+          (e, i) =>
+            "<div style=\"margin-top:" + (i === 0 ? "0" : "10px") + "\">" +
+            "<div style=\"display:flex;justify-content:space-between;align-items:baseline;margin-bottom:1px\">" +
+            "<span style=\"font-family:" + F + ";font-size:10.5pt;font-weight:bold\">" + e.role + "</span>" +
+            BD(e.duration) +
+            "</div>" +
+            (e.org
+              ? "<div style=\"font-family:" + F + ";font-size:10pt;color:#333;margin-bottom:2px\">" + e.org + "</div>"
+              : "") +
+            BL(e.bullets) +
+            "</div>"
         )
-        .join("")}
-    </div>`
+        .join("") +
+      "</div>"
     : "";
 
   const projRows = data.projects.filter((p) => p.name);
   const projHTML = projRows.length
-    ? `
-    <div style="margin-bottom:14px">
-      ${ST("Projects / Thesis")}
-      ${projRows
+    ? "<div style=\"margin-bottom:14px\">" +
+      ST("Projects / Thesis") +
+      projRows
         .map(
-          (p, i) => `
-        <div style="margin-top:${i === 0 ? "0" : "10px"}">
-          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:1px">
-            <span style="font-family:${F};font-size:10.5pt;font-weight:bold">${p.name}</span>
-            ${BD(p.duration)}
-          </div>
-          ${p.link ? `<div style="font-family:${F};font-size:9.5pt;color:#1a56db;margin-bottom:2px">🔗 ${p.link}</div>` : ""}
-          ${BL(p.bullets)}
-        </div>`,
+          (p, i) =>
+            "<div style=\"margin-top:" + (i === 0 ? "0" : "10px") + "\">" +
+            "<div style=\"display:flex;justify-content:space-between;align-items:baseline;margin-bottom:1px\">" +
+            "<span style=\"font-family:" + F + ";font-size:10.5pt;font-weight:bold\">" + p.name + "</span>" +
+            BD(p.duration) +
+            "</div>" +
+            (p.link
+              ? "<div style=\"font-family:" + F + ";font-size:9.5pt;color:#1a56db;margin-bottom:2px\">\uD83D\uDD17 " + p.link + "</div>"
+              : "") +
+            BL(p.bullets) +
+            "</div>"
         )
-        .join("")}
-    </div>`
+        .join("") +
+      "</div>"
     : "";
 
   const skillRows = data.skills.filter((s) => s.skills);
   const skillHTML = skillRows.length
-    ? `
-    <div style="margin-bottom:14px">
-      ${ST("Skills")}
-      ${skillRows
+    ? "<div style=\"margin-bottom:14px\">" +
+      ST("Skills") +
+      skillRows
         .map(
-          (s) => `
-        <div style="display:flex;gap:6px;margin-bottom:4px;font-family:${F};font-size:10pt;line-height:1.5">
-          ${s.category ? `<span style="font-weight:bold;flex-shrink:0;min-width:130px">${s.category}:</span>` : ""}
-          <span>${s.skills}</span>
-        </div>`,
+          (s) =>
+            "<div style=\"display:flex;gap:6px;margin-bottom:4px;font-family:" + F + ";font-size:10pt;line-height:1.5\">" +
+            (s.category
+              ? "<span style=\"font-weight:bold;flex-shrink:0;min-width:130px\">" + s.category + ":</span>"
+              : "") +
+            "<span>" + s.skills + "</span></div>"
         )
-        .join("")}
-    </div>`
+        .join("") +
+      "</div>"
     : "";
 
   const certRows = data.certifications.filter((c) => c.name);
   const certHTML = certRows.length
-    ? `
-    <div style="margin-bottom:14px">
-      ${ST("Certifications")}
-      ${certRows
+    ? "<div style=\"margin-bottom:14px\">" +
+      ST("Certifications") +
+      certRows
         .map(
-          (c, i) => `
-        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:${i === 0 ? "0" : "5px"}">
-          <span style="font-family:${F};font-size:10pt">
-            <b>${c.name}</b>${c.issuer ? ` <i style="color:#444">— ${c.issuer}</i>` : ""}
-          </span>
-          ${BD(c.date)}
-        </div>`,
+          (c, i) =>
+            "<div style=\"display:flex;justify-content:space-between;align-items:baseline;margin-top:" + (i === 0 ? "0" : "5px") + "\">" +
+            "<span style=\"font-family:" + F + ";font-size:10pt\">" +
+            "<b>" + c.name + "</b>" +
+            (c.issuer ? " <i style=\"color:#444\">\u2014 " + c.issuer + "</i>" : "") +
+            "</span>" +
+            BD(c.date) +
+            "</div>"
         )
-        .join("")}
-    </div>`
+        .join("") +
+      "</div>"
     : "";
 
   const refRows = data.references.filter((r) => r.name);
   const refHTML = refRows.length
-    ? `
-    <div style="margin-bottom:14px">
-      ${ST("References")}
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 24px">
-        ${refRows
-          .map(
-            (r) => `
-          <div>
-            <div style="font-family:${F};font-size:10.5pt;font-weight:bold;margin-bottom:1px">${r.name}</div>
-            ${r.title ? `<div style="font-family:${F};font-size:10pt;font-style:italic;color:#333">${r.title}</div>` : ""}
-            ${r.org ? `<div style="font-family:${F};font-size:10pt;color:#444">${r.org}</div>` : ""}
-            ${r.phone ? `<div style="font-family:${F};font-size:9.5pt;color:#444">Phone: ${r.phone}</div>` : ""}
-            ${r.email ? `<div style="font-family:${F};font-size:9.5pt;color:#1a56db">Email: ${r.email}</div>` : ""}
-          </div>`,
-          )
-          .join("")}
-      </div>
-    </div>`
+    ? "<div style=\"margin-bottom:14px\">" +
+      ST("References") +
+      "<div style=\"display:grid;grid-template-columns:1fr 1fr;gap:12px 24px\">" +
+      refRows
+        .map(
+          (r) =>
+            "<div>" +
+            "<div style=\"font-family:" + F + ";font-size:10.5pt;font-weight:bold;margin-bottom:1px\">" + r.name + "</div>" +
+            (r.title
+              ? "<div style=\"font-family:" + F + ";font-size:10pt;font-style:italic;color:#333\">" + r.title + "</div>"
+              : "") +
+            (r.org
+              ? "<div style=\"font-family:" + F + ";font-size:10pt;color:#444\">" + r.org + "</div>"
+              : "") +
+            (r.phone
+              ? "<div style=\"font-family:" + F + ";font-size:9.5pt;color:#444\">Phone: " + r.phone + "</div>"
+              : "") +
+            (r.email
+              ? "<div style=\"font-family:" + F + ";font-size:9.5pt;color:#1a56db\">Email: " + r.email + "</div>"
+              : "") +
+            "</div>"
+        )
+        .join("") +
+      "</div></div>"
     : "";
 
   const extraRows = data.extras.filter((e) => e.label && e.value);
   const extraHTML = extraRows.length
-    ? `
-    <div style="margin-bottom:14px">
-      ${ST("Additional Information")}
-      ${extraRows
+    ? "<div style=\"margin-bottom:14px\">" +
+      ST("Additional Information") +
+      extraRows
         .map(
-          (e) => `
-        <div style="display:flex;gap:6px;margin-bottom:4px;font-family:${F};font-size:10pt">
-          <span style="font-weight:bold;flex-shrink:0;min-width:140px">${e.label}:</span>
-          <span>${e.value}</span>
-        </div>`,
+          (e) =>
+            "<div style=\"display:flex;gap:6px;margin-bottom:4px;font-family:" + F + ";font-size:10pt\">" +
+            "<span style=\"font-weight:bold;flex-shrink:0;min-width:140px\">" + e.label + ":</span>" +
+            "<span>" + e.value + "</span></div>"
         )
-        .join("")}
-    </div>`
+        .join("") +
+      "</div>"
     : "";
 
-  return `<!DOCTYPE html><html><head><meta charset="utf-8">
-    <style>* { box-sizing:border-box; margin:0; padding:0; } body { background:white; }</style>
-  </head><body>
-    <div id="cv-root" style="
-  width:794px;
-  min-height:1123px;
-  padding:72px 82px 96px 82px;
-  background:white;
-  font-family:${F};
-  color:#000;
-  box-sizing:border-box;
-">
-      <div style="display:flex;justify-content:${hasPhoto ? "space-between" : "center"};align-items:flex-start;
-                  border-bottom:2.5px solid #000;padding-bottom:12px;margin-bottom:14px;gap:14px">
-        <div style="flex:${hasPhoto ? "1" : "unset"};text-align:${hasPhoto ? "left" : "center"}">
-          <h1 style="font-family:${F};font-size:26pt;font-weight:bold;text-transform:uppercase;
-                     letter-spacing:1px;line-height:1.05;margin:0 0 5px 0">${data.full_name || "YOUR NAME"}</h1>
-          ${contacts ? `<div style="font-family:${F};font-size:10pt;color:#222;line-height:1.7">${contacts}</div>` : ""}
-          ${socialLines}
-        </div>
-        ${
-          hasPhoto
-            ? `<div style="width:100px;height:126px;flex-shrink:0;border:1.5px solid #000;overflow:hidden;background:#f0f0f0">
-          <img src="${photo}" crossorigin="anonymous" style="width:100%;height:100%;object-fit:cover;object-position:center top;display:block"/></div>`
-            : ""
-        }
-      </div>
-      ${summaryHTML}${eduHTML}${expHTML}${projHTML}${skillHTML}${certHTML}${refHTML}${extraHTML}
-    </div>
-  </body></html>`;
+  const headerAlign = hasPhoto ? "space-between" : "center";
+  const headerFlex  = hasPhoto ? "1" : "unset";
+  const headerText  = hasPhoto ? "left" : "center";
+
+  const photoHTML = hasPhoto
+    ? "<div style=\"width:100px;height:126px;flex-shrink:0;border:1.5px solid #000;overflow:hidden;background:#f0f0f0\">" +
+      "<img src=\"" + photo + "\" crossorigin=\"anonymous\" " +
+      "style=\"width:100%;height:100%;object-fit:cover;object-position:center top;display:block\"/></div>"
+    : "";
+
+  return (
+    "<!DOCTYPE html><html><head><meta charset=\"utf-8\">" +
+    "<style>* { box-sizing:border-box; margin:0; padding:0; } body { background:white; }</style>" +
+    "</head><body>" +
+    "<div id=\"cv-root\" style=\"" +
+    "width:794px;min-height:1123px;padding:72px 82px 96px 82px;" +
+    "background:white;font-family:" + F + ";color:#000;box-sizing:border-box;\">" +
+    "<div style=\"display:flex;justify-content:" + headerAlign + ";align-items:flex-start;" +
+    "border-bottom:2.5px solid #000;padding-bottom:12px;margin-bottom:14px;gap:14px\">" +
+    "<div style=\"flex:" + headerFlex + ";text-align:" + headerText + "\">" +
+    "<h1 style=\"font-family:" + F + ";font-size:26pt;font-weight:bold;text-transform:uppercase;" +
+    "letter-spacing:1px;line-height:1.05;margin:0 0 5px 0\">" + (data.full_name || "YOUR NAME") + "</h1>" +
+    (contacts
+      ? "<div style=\"font-family:" + F + ";font-size:10pt;color:#222;line-height:1.7\">" + contacts + "</div>"
+      : "") +
+    socialLines +
+    "</div>" +
+    photoHTML +
+    "</div>" +
+    summaryHTML +
+    eduHTML +
+    expHTML +
+    projHTML +
+    skillHTML +
+    certHTML +
+    refHTML +
+    extraHTML +
+    "</div></body></html>"
+  );
 }
 
 // ─── TYPES ───────────────────────────────────────────────────────────────────
@@ -347,7 +356,7 @@ async function generateCVWithAI(
   setResume: (r: ResumeData) => void,
   setStatus: (s: string) => void,
 ) {
-  setStatus("Calling AI…");
+  setStatus("Calling AI\u2026");
   try {
     const res = await fetch("/api/ai", {
       method: "POST",
@@ -355,7 +364,7 @@ async function generateCVWithAI(
       body: JSON.stringify({ prompt: brief.slice(0, 800) }),
     });
 
-    setStatus("Parsing response…");
+    setStatus("Parsing response\u2026");
 
     const d = (await res.json()) as AIResponse;
 
@@ -460,15 +469,15 @@ export default function Builder() {
     return { add, remove, upd };
   }
 
-  const edu = makeU<EduEntry>("education", blankEdu);
-  const exp = makeU<ExpEntry>("experience", blankExp);
-  const proj = makeU<ProjectEntry>("projects", blankProj);
+  const edu   = makeU<EduEntry>("education", blankEdu);
+  const exp   = makeU<ExpEntry>("experience", blankExp);
+  const proj  = makeU<ProjectEntry>("projects", blankProj);
   const skill = makeU<SkillEntry>("skills", blankSkill);
-  const cert = makeU<CertEntry>("certifications", blankCert);
-  const ref_ = makeU<RefEntry>("references", blankRef);
+  const cert  = makeU<CertEntry>("certifications", blankCert);
+  const ref_  = makeU<RefEntry>("references", blankRef);
   const extra = makeU<ExtraEntry>("extras", blankExtra);
 
-  // ─── AI IMPROVE ──────────────────────────────────────────────────────────
+  // ─── AI IMPROVE ────────────────────────────────────────────────────────────
   const aiImprove = async (
     text: string,
     ctx: string,
@@ -482,7 +491,9 @@ export default function Builder() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          prompt: `Improve the following ${ctx} to be professional, concise, and ATS-friendly. Use action verbs. Keep bullet points one per line. Return ONLY the improved text, no explanation.\n\nOriginal:\n${text}`,
+          prompt:
+            "Improve the following " + ctx + " to be professional, concise, and ATS-friendly. " +
+            "Use action verbs. Keep bullet points one per line. Return ONLY the improved text, no explanation.\n\nOriginal:\n" + text,
         }),
       });
       const d = (await res.json()) as AIResponse & { summary?: string };
@@ -495,14 +506,7 @@ export default function Builder() {
     setAiLoading(null);
   };
 
-  // ─── PDF EXPORT ──────────────────────────────────────────────────────────
-  // FIXES applied:
-  //   1. windowWidth + windowHeight passed to html2canvas → locks layout to 794px, no reflow
-  //   2. MARGIN_MM = 15 → matches the 82px HTML side padding (~0.85in visual balance)
-  //   3. Multi-page math rewritten: draw the FULL image on every page, shift imageTop
-  //      up by one printH per page so only the correct slice shows within page bounds.
-  //      Old code used `position = margin - heightLeft` which drifted cumulatively.
-  //   4. setExportingPDF(false) moved to finally → always clears even on error
+  // ─── PDF EXPORT ────────────────────────────────────────────────────────────
   const exportPDF = async () => {
     setExportingPDF(true);
     try {
@@ -511,7 +515,6 @@ export default function Builder() {
         import("html2canvas").then((m) => m.default),
       ]);
 
-      // ── 1. Hidden iframe at exact A4 pixel width ────────────────────────
       const A4_W = 794;
       const iframe = document.createElement("iframe");
       iframe.style.cssText =
@@ -524,17 +527,14 @@ export default function Builder() {
       iDoc.write(buildPDFHtml(resume, photo));
       iDoc.close();
 
-      // ── 2. Wait for fonts + images to load ─────────────────────────────
       await new Promise((r) => setTimeout(r, 600));
 
       const root = iDoc.getElementById("cv-root") as HTMLElement;
       const totalHeight = root.scrollHeight;
 
-      // Expand iframe to full content height so nothing is clipped
-      iframe.style.height = `${totalHeight}px`;
+      iframe.style.height = totalHeight + "px";
       await new Promise((r) => setTimeout(r, 200));
 
-      // ── 3. Capture canvas ───────────────────────────────────────────────
       const canvas = await html2canvas(root, {
         scale: 2,
         useCORS: true,
@@ -542,7 +542,7 @@ export default function Builder() {
         backgroundColor: "#ffffff",
         width: A4_W,
         height: totalHeight,
-        windowWidth: A4_W,       // locks layout to 794px — prevents iframe reflow
+        windowWidth: A4_W,
         windowHeight: totalHeight,
         scrollX: 0,
         scrollY: 0,
@@ -552,57 +552,42 @@ export default function Builder() {
 
       document.body.removeChild(iframe);
 
-      // ── 4. PDF dimensions (all mm) ──────────────────────────────────────
       const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
 
       const PAGE_W_MM = 210;
       const PAGE_H_MM = 297;
-      const MARGIN_MM = 15; // ~0.59in — visually matches the 82px HTML side padding
+      const MARGIN_MM = 15;
 
-      const printW = PAGE_W_MM - MARGIN_MM * 2; // 180mm usable width
-      const printH = PAGE_H_MM - MARGIN_MM * 2; // 267mm usable height per page
+      const printW = PAGE_W_MM - MARGIN_MM * 2;
+      const printH = PAGE_H_MM - MARGIN_MM * 2;
 
-      // Scale full canvas height proportionally to the usable print width
       const imgW_mm = printW;
       const imgH_mm = (canvas.height / canvas.width) * imgW_mm;
 
       const imgData = canvas.toDataURL("image/jpeg", 0.95);
 
-      // ── 5. Multi-page logic ─────────────────────────────────────────────
-      //
-      // Draw the FULL-height image on every page, shifting imageTop upward
-      // so only the correct "slice" is visible within the page's printable area.
-      //
-      //   Page 1: imageTop = MARGIN_MM                      → shows rows 0 … printH
-      //   Page 2: imageTop = MARGIN_MM - printH             → shows rows printH … 2*printH
-      //   Page N: imageTop = MARGIN_MM - (N-1)*printH
-      //
-      // jsPDF clips everything outside the page dimensions automatically,
-      // so this slice-by-shift approach produces clean page breaks with no drift.
-
-      let remainingMM = imgH_mm;   // mm of image content still to render
-      let imageTop    = MARGIN_MM; // Y position of image top on current page
+      let remainingMM = imgH_mm;
+      let imageTop    = MARGIN_MM;
 
       while (remainingMM > 0) {
         pdf.addImage(
           imgData,
           "JPEG",
-          MARGIN_MM,  // X — equal left margin
-          imageTop,   // Y — shifts up each page so the correct slice is visible
-          imgW_mm,    // width  — fills usable area exactly
-          imgH_mm,    // height — always the FULL image (jsPDF clips to page bounds)
+          MARGIN_MM,
+          imageTop,
+          imgW_mm,
+          imgH_mm,
         );
 
         remainingMM -= printH;
 
         if (remainingMM > 0) {
           pdf.addPage();
-          // Shift image further up so the next slice aligns to top margin
           imageTop = MARGIN_MM - (imgH_mm - remainingMM);
         }
       }
 
-      pdf.save(`${resume.full_name || "Resume"}_CV.pdf`);
+      pdf.save((resume.full_name || "Resume") + "_CV.pdf");
     } catch (err) {
       console.error("PDF export error:", err);
       alert("PDF export failed. Check console for details.");
@@ -611,7 +596,7 @@ export default function Builder() {
     }
   };
 
-  // ─── DOCX EXPORT ─────────────────────────────────────────────────────────
+  // ─── DOCX EXPORT ───────────────────────────────────────────────────────────
   const exportDOCX = async () => {
     setExportingDOCX(true);
     try {
@@ -641,8 +626,8 @@ export default function Builder() {
 
       const cl = [resume.email, resume.phone, resume.location].filter(Boolean).join("  |  ");
       if (cl) ch.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 40 }, children: [tx(cl, "444444")] }));
-      if (resume.linkedin) ch.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 20 }, children: [bd("LinkedIn: "), tx(resume.linkedin, "1a56db")] }));
-      if (resume.github) ch.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 20 }, children: [bd("GitHub: "), tx(resume.github, "1a56db")] }));
+      if (resume.linkedin)  ch.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 20 }, children: [bd("LinkedIn: "),  tx(resume.linkedin,  "1a56db")] }));
+      if (resume.github)    ch.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 20 }, children: [bd("GitHub: "),    tx(resume.github,    "1a56db")] }));
       if (resume.portfolio) ch.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 160 }, children: [bd("Portfolio: "), tx(resume.portfolio, "1a56db")] }));
 
       if (resume.summary) {
@@ -654,8 +639,8 @@ export default function Builder() {
       if (eduR.length) {
         ch.push(SH("Education"));
         for (const e of eduR) {
-          ch.push(new Paragraph({ spacing: { before: 80, after: 0 }, children: [bd(e.institution), ...(e.duration ? [tx(`\t${e.duration}`)] : [])] }));
-          if (e.degree || e.cgpa) ch.push(new Paragraph({ spacing: { after: 40 }, children: [tx(e.degree, undefined, true), ...(e.cgpa ? [tx(`\tCGPA: `), bd(e.cgpa)] : [])] }));
+          ch.push(new Paragraph({ spacing: { before: 80, after: 0 }, children: [bd(e.institution), ...(e.duration ? [tx("\t" + e.duration)] : [])] }));
+          if (e.degree || e.cgpa) ch.push(new Paragraph({ spacing: { after: 40 }, children: [tx(e.degree, undefined, true), ...(e.cgpa ? [tx("\tCGPA: "), bd(e.cgpa)] : [])] }));
         }
       }
 
@@ -663,7 +648,7 @@ export default function Builder() {
       if (expR.length) {
         ch.push(SH("Work Experience"));
         for (const e of expR) {
-          ch.push(new Paragraph({ spacing: { before: 80, after: 0 }, children: [bd(e.role), ...(e.duration ? [new TextRun({ text: `\t${e.duration}`, bold: true, size: 20, font: TN })] : [])] }));
+          ch.push(new Paragraph({ spacing: { before: 80, after: 0 }, children: [bd(e.role), ...(e.duration ? [new TextRun({ text: "\t" + e.duration, bold: true, size: 20, font: TN })] : [])] }));
           if (e.org) ch.push(new Paragraph({ spacing: { after: 20 }, children: [tx(e.org)] }));
           for (const b of e.bullets.split("\n").filter((b) => b.trim()))
             ch.push(new Paragraph({ bullet: { level: 0 }, spacing: { after: 30 }, children: [tx(b.trim())] }));
@@ -674,7 +659,7 @@ export default function Builder() {
       if (prR.length) {
         ch.push(SH("Projects / Thesis"));
         for (const p of prR) {
-          ch.push(new Paragraph({ spacing: { before: 80, after: 0 }, children: [bd(p.name), ...(p.duration ? [new TextRun({ text: `\t${p.duration}`, bold: true, size: 20, font: TN })] : [])] }));
+          ch.push(new Paragraph({ spacing: { before: 80, after: 0 }, children: [bd(p.name), ...(p.duration ? [new TextRun({ text: "\t" + p.duration, bold: true, size: 20, font: TN })] : [])] }));
           if (p.link) ch.push(new Paragraph({ spacing: { after: 20 }, children: [tx("Link: "), new ExternalHyperlink({ link: p.link, children: [new TextRun({ text: p.link, size: 19, font: TN, color: "1a56db", underline: {} })] })] }));
           for (const b of p.bullets.split("\n").filter((b) => b.trim()))
             ch.push(new Paragraph({ bullet: { level: 0 }, spacing: { after: 30 }, children: [tx(b.trim())] }));
@@ -684,13 +669,13 @@ export default function Builder() {
       const skR = resume.skills.filter((s) => s.skills);
       if (skR.length) {
         ch.push(SH("Skills"));
-        for (const s of skR) ch.push(new Paragraph({ spacing: { after: 30 }, children: [...(s.category ? [bd(`${s.category}: `)] : []), tx(s.skills)] }));
+        for (const s of skR) ch.push(new Paragraph({ spacing: { after: 30 }, children: [...(s.category ? [bd(s.category + ": ")] : []), tx(s.skills)] }));
       }
 
       const ceR = resume.certifications.filter((c) => c.name);
       if (ceR.length) {
         ch.push(SH("Certifications"));
-        for (const c of ceR) ch.push(new Paragraph({ spacing: { after: 30 }, children: [bd(c.name), ...(c.issuer ? [tx(` — ${c.issuer}`, undefined, true)] : []), ...(c.date ? [new TextRun({ text: `\t${c.date}`, bold: true, size: 20, font: TN })] : [])] }));
+        for (const c of ceR) ch.push(new Paragraph({ spacing: { after: 30 }, children: [bd(c.name), ...(c.issuer ? [tx(" \u2014 " + c.issuer, undefined, true)] : []), ...(c.date ? [new TextRun({ text: "\t" + c.date, bold: true, size: 20, font: TN })] : [])] }));
       }
 
       const rfR = resume.references.filter((r) => r.name);
@@ -699,30 +684,30 @@ export default function Builder() {
         for (const r of rfR) {
           ch.push(new Paragraph({ spacing: { before: 80, after: 0 }, children: [bd(r.name)] }));
           if (r.title) ch.push(new Paragraph({ spacing: { after: 0 }, children: [tx(r.title, undefined, true)] }));
-          if (r.org) ch.push(new Paragraph({ spacing: { after: 0 }, children: [tx(r.org)] }));
-          if (r.phone) ch.push(new Paragraph({ spacing: { after: 0 }, children: [tx(`Phone: ${r.phone}`)] }));
-          if (r.email) ch.push(new Paragraph({ spacing: { after: 60 }, children: [tx(`Email: ${r.email}`, "1a56db")] }));
+          if (r.org)   ch.push(new Paragraph({ spacing: { after: 0 }, children: [tx(r.org)] }));
+          if (r.phone) ch.push(new Paragraph({ spacing: { after: 0 }, children: [tx("Phone: " + r.phone)] }));
+          if (r.email) ch.push(new Paragraph({ spacing: { after: 60 }, children: [tx("Email: " + r.email, "1a56db")] }));
         }
       }
 
       const exR = resume.extras.filter((e) => e.label && e.value);
       if (exR.length) {
         ch.push(SH("Additional Information"));
-        for (const e of exR) ch.push(new Paragraph({ spacing: { after: 30 }, children: [bd(`${e.label}: `), tx(e.value)] }));
+        for (const e of exR) ch.push(new Paragraph({ spacing: { after: 30 }, children: [bd(e.label + ": "), tx(e.value)] }));
       }
 
       const doc = new Document({ sections: [{ children: ch }] });
-      saveAs(await Packer.toBlob(doc), `${resume.full_name || "Resume"}_CV.docx`);
+      saveAs(await Packer.toBlob(doc), (resume.full_name || "Resume") + "_CV.docx");
     } catch (err) {
       console.error("DOCX error:", err);
-      alert("DOCX export failed — check console.");
+      alert("DOCX export failed \u2014 check console.");
     } finally {
       setExportingDOCX(false);
     }
   };
 
   const isExporting = exportingPDF || exportingDOCX;
-  const isAiGen = aiGenStatus === "Calling AI…" || aiGenStatus === "Parsing response…";
+  const isAiGen = aiGenStatus === "Calling AI\u2026" || aiGenStatus === "Parsing response\u2026";
 
   return (
     <>
@@ -781,7 +766,7 @@ export default function Builder() {
               <motion.div initial={{ scale: 0.8 }} animate={{ scale: 1 }} className="flex flex-col items-center gap-4">
                 <Loader2 className="w-14 h-14 text-blue-500 animate-spin" />
                 <p className="font-bold tracking-[.25em] text-xs uppercase text-slate-300 animate-pulse">
-                  {isAiGen ? aiGenStatus : exportingPDF ? "Generating PDF…" : "Building DOCX…"}
+                  {isAiGen ? aiGenStatus : exportingPDF ? "Generating PDF\u2026" : "Building DOCX\u2026"}
                 </p>
               </motion.div>
             </motion.div>
@@ -794,7 +779,10 @@ export default function Builder() {
             <motion.div
               className="ai-modal-bg"
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              onClick={(e) => { if ((e.target as HTMLElement).classList.contains("ai-modal-bg")) setShowAIModal(false); }}
+              onClick={(e) => {
+                if ((e.target as HTMLElement).classList.contains("ai-modal-bg"))
+                  setShowAIModal(false);
+              }}
             >
               <motion.div className="ai-modal" initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }}>
                 <div className="flex items-center gap-3 mb-5">
@@ -848,13 +836,27 @@ export default function Builder() {
           <header className="flex justify-between items-center mb-4">
             <h1 className="text-3xl font-black text-blue-500 italic tracking-tighter">CV DADA</h1>
             <div className="flex gap-2 flex-wrap justify-end">
-              <button onClick={() => { setAiGenStatus(""); setShowAIModal(true); }} className="abtn" style={{ background: "linear-gradient(135deg,#4f46e5,#7c3aed)" }}>
+              <button
+                onClick={() => { setAiGenStatus(""); setShowAIModal(true); }}
+                className="abtn"
+                style={{ background: "linear-gradient(135deg,#4f46e5,#7c3aed)" }}
+              >
                 <Wand2 size={13} /> AI Build
               </button>
-              <button onClick={exportPDF} disabled={isExporting} className="abtn" style={{ background: "linear-gradient(135deg,#2563eb,#1d4ed8)" }}>
+              <button
+                onClick={exportPDF}
+                disabled={isExporting}
+                className="abtn"
+                style={{ background: "linear-gradient(135deg,#2563eb,#1d4ed8)" }}
+              >
                 {exportingPDF ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />} PDF
               </button>
-              <button onClick={exportDOCX} disabled={isExporting} className="abtn" style={{ background: "linear-gradient(135deg,#334155,#1e293b)" }}>
+              <button
+                onClick={exportDOCX}
+                disabled={isExporting}
+                className="abtn"
+                style={{ background: "linear-gradient(135deg,#334155,#1e293b)" }}
+              >
                 {exportingDOCX ? <Loader2 size={13} className="animate-spin" /> : <FileText size={13} />} DOCX
               </button>
             </div>
@@ -883,12 +885,27 @@ export default function Builder() {
                   <ImageIcon size={22} color="#475569" />
                 )}
               </div>
-              <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (!f) return; const r = new FileReader(); r.onload = () => setPhoto(r.result as string); r.readAsDataURL(f); }} />
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (!f) return;
+                  const r = new FileReader();
+                  r.onload = () => setPhoto(r.result as string);
+                  r.readAsDataURL(f);
+                }}
+              />
             </label>
             <div>
               <p className="text-sm font-bold text-white mb-1">Passport Photo</p>
               <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest mb-2">Click to upload</p>
-              {photo && <button onClick={() => setPhoto(null)} className="text-[10px] text-red-400 hover:text-red-300 transition-colors font-semibold">✕ Remove</button>}
+              {photo && (
+                <button onClick={() => setPhoto(null)} className="text-[10px] text-red-400 hover:text-red-300 transition-colors font-semibold">
+                  ✕ Remove
+                </button>
+              )}
             </div>
           </div>
 
@@ -917,13 +934,21 @@ export default function Builder() {
           <div className="sec-box">
             <div className="flex items-center justify-between">
               <SecHeader id="summary" label="Professional Summary" num="2" collapsed={collapsed} onToggle={toggleSection} />
-              <button className="aibtn mb-3 ml-2 shrink-0" disabled={!!aiLoading}
-                onClick={() => aiImprove(resume.summary, "professional summary", (v) => setField("summary", v), "summary")}>
+              <button
+                className="aibtn mb-3 ml-2 shrink-0"
+                disabled={!!aiLoading}
+                onClick={() => aiImprove(resume.summary, "professional summary", (v) => setField("summary", v), "summary")}
+              >
                 {aiLoading === "summary" ? <Loader2 size={10} className="animate-spin" /> : <Sparkles size={10} />} AI
               </button>
             </div>
             {!collapsed["summary"] && (
-              <textarea className="di min-h-20 text-xs" placeholder="Write a 2–4 sentence professional profile…" value={resume.summary} onChange={(e) => setField("summary", e.target.value)} />
+              <textarea
+                className="di min-h-20 text-xs"
+                placeholder="Write a 2–4 sentence professional profile…"
+                value={resume.summary}
+                onChange={(e) => setField("summary", e.target.value)}
+              />
             )}
           </div>
 
@@ -937,7 +962,11 @@ export default function Builder() {
                     {idx > 0 && <hr className="entry-divider" />}
                     <div className="flex justify-between items-center mb-2">
                       <span className="text-[10px] text-slate-600 font-bold">Degree {idx + 1}</span>
-                      {idx > 0 && <button className="icon-btn" onClick={() => edu.remove(e.id)}><Trash2 size={12} color="#f87171" /></button>}
+                      {idx > 0 && (
+                        <button className="icon-btn" onClick={() => edu.remove(e.id)}>
+                          <Trash2 size={12} color="#f87171" />
+                        </button>
+                      )}
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <input className="di text-xs col-span-2" placeholder="University / Institution" value={e.institution} onChange={(ev) => edu.upd(e.id, "institution", ev.target.value)} />
@@ -962,7 +991,11 @@ export default function Builder() {
                     {idx > 0 && <hr className="entry-divider" />}
                     <div className="flex justify-between items-center mb-2">
                       <span className="text-[10px] text-slate-600 font-bold">Job {idx + 1}</span>
-                      {idx > 0 && <button className="icon-btn" onClick={() => exp.remove(e.id)}><Trash2 size={12} color="#f87171" /></button>}
+                      {idx > 0 && (
+                        <button className="icon-btn" onClick={() => exp.remove(e.id)}>
+                          <Trash2 size={12} color="#f87171" />
+                        </button>
+                      )}
                     </div>
                     <div className="grid grid-cols-2 gap-2 mb-2">
                       <input className="di text-xs col-span-2" placeholder="Role / Position" value={e.role} onChange={(ev) => exp.upd(e.id, "role", ev.target.value)} />
@@ -971,12 +1004,20 @@ export default function Builder() {
                     </div>
                     <div className="flex justify-between items-center mb-1">
                       <span className="text-[9px] text-slate-600 font-bold uppercase tracking-widest">Responsibilities (one per line)</span>
-                      <button className="aibtn" disabled={!!aiLoading}
-                        onClick={() => aiImprove(e.bullets, "work experience", (v) => exp.upd(e.id, "bullets", v), `exp-${e.id}`)}>
-                        {aiLoading === `exp-${e.id}` ? <Loader2 size={10} className="animate-spin" /> : <Sparkles size={10} />} AI
+                      <button
+                        className="aibtn"
+                        disabled={!!aiLoading}
+                        onClick={() => aiImprove(e.bullets, "work experience", (v) => exp.upd(e.id, "bullets", v), "exp-" + e.id)}
+                      >
+                        {aiLoading === "exp-" + e.id ? <Loader2 size={10} className="animate-spin" /> : <Sparkles size={10} />} AI
                       </button>
                     </div>
-                    <textarea className="di min-h-20 text-xs font-mono" placeholder="Led team of 5 to deliver…&#10;Reduced load time by 40%…" value={e.bullets} onChange={(ev) => exp.upd(e.id, "bullets", ev.target.value)} />
+                    <textarea
+                      className="di min-h-20 text-xs font-mono"
+                      placeholder={"Led team of 5 to deliver\u2026\nReduced load time by 40%\u2026"}
+                      value={e.bullets}
+                      onChange={(ev) => exp.upd(e.id, "bullets", ev.target.value)}
+                    />
                   </div>
                 ))}
                 <button className="add-btn" onClick={exp.add}>+ Add Job</button>
@@ -994,7 +1035,11 @@ export default function Builder() {
                     {idx > 0 && <hr className="entry-divider" />}
                     <div className="flex justify-between items-center mb-2">
                       <span className="text-[10px] text-slate-600 font-bold">Project {idx + 1}</span>
-                      {idx > 0 && <button className="icon-btn" onClick={() => proj.remove(p.id)}><Trash2 size={12} color="#f87171" /></button>}
+                      {idx > 0 && (
+                        <button className="icon-btn" onClick={() => proj.remove(p.id)}>
+                          <Trash2 size={12} color="#f87171" />
+                        </button>
+                      )}
                     </div>
                     <div className="grid grid-cols-2 gap-2 mb-2">
                       <input className="di text-xs col-span-2" placeholder="Project / Thesis Title" value={p.name} onChange={(ev) => proj.upd(p.id, "name", ev.target.value)} />
@@ -1005,16 +1050,29 @@ export default function Builder() {
                         <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
                         <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
                       </svg>
-                      <input placeholder="GitHub / Live demo link" value={p.link} onChange={(ev) => proj.upd(p.id, "link", ev.target.value)} />
+                      <input
+                        placeholder="GitHub / Live demo link"
+                        value={p.link}
+                        onChange={(ev) => proj.upd(p.id, "link", ev.target.value)}
+                      />
                     </div>
                     <div className="flex justify-between items-center mb-1">
                       <span className="text-[9px] text-slate-600 font-bold uppercase tracking-widest">Description (one per line)</span>
-                      <button className="aibtn" disabled={!!aiLoading}
-                        onClick={() => aiImprove(p.bullets, "project description", (v) => proj.upd(p.id, "bullets", v), `proj-${p.id}`)}>
-                        {aiLoading === `proj-${p.id}` ? <Loader2 size={10} className="animate-spin" /> : <Sparkles size={10} />} AI
+                      <button
+                        className="aibtn"
+                        disabled={!!aiLoading}
+                        onClick={() => aiImprove(p.bullets, "project description", (v) => proj.upd(p.id, "bullets", v), "proj-" + p.id)}
+                      >
+                        {aiLoading === "proj-" + p.id ? <Loader2 size={10} className="animate-spin" /> : <Sparkles size={10} />} AI
                       </button>
                     </div>
-                    <textarea className="di text-xs font-mono" style={{ minHeight: 70 }} placeholder="Built REST API with…&#10;Achieved 95% test coverage…" value={p.bullets} onChange={(ev) => proj.upd(p.id, "bullets", ev.target.value)} />
+                    <textarea
+                      className="di text-xs font-mono"
+                      style={{ minHeight: 70 }}
+                      placeholder={"Built REST API with\u2026\nAchieved 95% test coverage\u2026"}
+                      value={p.bullets}
+                      onChange={(ev) => proj.upd(p.id, "bullets", ev.target.value)}
+                    />
                   </div>
                 ))}
                 <button className="add-btn" onClick={proj.add}>+ Add Project</button>
@@ -1031,8 +1089,12 @@ export default function Builder() {
                 {resume.skills.map((s, idx) => (
                   <div key={s.id} className="flex gap-2 mb-2 items-center">
                     <input className="di text-xs" style={{ maxWidth: 130 }} placeholder="e.g. Languages" value={s.category} onChange={(e) => skill.upd(s.id, "category", e.target.value)} />
-                    <input className="di text-xs flex-1" placeholder="Python, React, Docker…" value={s.skills} onChange={(e) => skill.upd(s.id, "skills", e.target.value)} />
-                    {idx > 0 && <button className="icon-btn" onClick={() => skill.remove(s.id)}><Trash2 size={12} color="#f87171" /></button>}
+                    <input className="di text-xs flex-1" placeholder="Python, React, Docker\u2026" value={s.skills} onChange={(e) => skill.upd(s.id, "skills", e.target.value)} />
+                    {idx > 0 && (
+                      <button className="icon-btn" onClick={() => skill.remove(s.id)}>
+                        <Trash2 size={12} color="#f87171" />
+                      </button>
+                    )}
                   </div>
                 ))}
                 <button className="add-btn" onClick={skill.add}>+ Add Category</button>
@@ -1051,7 +1113,11 @@ export default function Builder() {
                     <input className="di text-xs" placeholder="Issuer  e.g. Coursera" value={c.issuer} onChange={(e) => cert.upd(c.id, "issuer", e.target.value)} />
                     <div className="flex gap-2">
                       <input className="di text-xs flex-1" placeholder="Date" value={c.date} onChange={(e) => cert.upd(c.id, "date", e.target.value)} />
-                      {idx > 0 && <button className="icon-btn" onClick={() => cert.remove(c.id)}><Trash2 size={12} color="#f87171" /></button>}
+                      {idx > 0 && (
+                        <button className="icon-btn" onClick={() => cert.remove(c.id)}>
+                          <Trash2 size={12} color="#f87171" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -1070,7 +1136,11 @@ export default function Builder() {
                     {idx > 0 && <hr className="entry-divider" />}
                     <div className="flex justify-between items-center mb-2">
                       <span className="text-[10px] text-slate-600 font-bold">Reference {idx + 1}</span>
-                      {idx > 0 && <button className="icon-btn" onClick={() => ref_.remove(r.id)}><Trash2 size={12} color="#f87171" /></button>}
+                      {idx > 0 && (
+                        <button className="icon-btn" onClick={() => ref_.remove(r.id)}>
+                          <Trash2 size={12} color="#f87171" />
+                        </button>
+                      )}
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <input className="di text-xs col-span-2" placeholder="Full Name" value={r.name} onChange={(e) => ref_.upd(r.id, "name", e.target.value)} />
@@ -1095,7 +1165,11 @@ export default function Builder() {
                   <div key={e.id} className="flex gap-2 mb-2 items-center">
                     <input className="di text-xs" style={{ maxWidth: 150 }} placeholder="Label" value={e.label} onChange={(ev) => extra.upd(e.id, "label", ev.target.value)} />
                     <input className="di text-xs flex-1" placeholder="Value" value={e.value} onChange={(ev) => extra.upd(e.id, "value", ev.target.value)} />
-                    {idx > 0 && <button className="icon-btn" onClick={() => extra.remove(e.id)}><Trash2 size={12} color="#f87171" /></button>}
+                    {idx > 0 && (
+                      <button className="icon-btn" onClick={() => extra.remove(e.id)}>
+                        <Trash2 size={12} color="#f87171" />
+                      </button>
+                    )}
                   </div>
                 ))}
                 <button className="add-btn" onClick={extra.add}>+ Add Row</button>
@@ -1105,10 +1179,17 @@ export default function Builder() {
         </div>
 
         {/* ══ RIGHT PREVIEW ════════════════════════════════════════════════════ */}
-        <div className="hidden lg:block w-full lg:w-1/2 bg-[#010413] overflow-y-auto scrollbar-hide" style={{ minHeight: "100vh" }}>
+        <div
+          className="hidden lg:block w-full lg:w-1/2 bg-[#010413] overflow-y-auto scrollbar-hide"
+          style={{ minHeight: "100vh" }}
+        >
           <div style={{ display: "flex", justifyContent: "center", padding: "40px 0", minHeight: "100%" }}>
             <div style={{ transformOrigin: "top center", transform: "scale(0.65)", alignSelf: "flex-start" }}>
-              <StandardCV data={resume} photo={photo} previewRef={previewRef as React.RefObject<HTMLDivElement>} />
+              <StandardCV
+                data={resume}
+                photo={photo}
+                previewRef={previewRef as React.RefObject<HTMLDivElement>}
+              />
             </div>
           </div>
         </div>

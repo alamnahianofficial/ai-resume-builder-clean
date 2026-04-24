@@ -1,80 +1,54 @@
 "use client";
 
 import { useResumeStore } from "@/store/useResumeStore";
+import html2canvas from "html2canvas";
+import jsPDF from "jspdf";
+import { useState } from "react";
 
 export default function ResumePreview() {
   const { personal, education, experience } = useResumeStore();
+  const [exporting, setExporting] = useState(false);
 
   const handleDownload = async () => {
     const element = document.getElementById("resume");
     if (!element) return;
 
+    setExporting(true);
     try {
-      const html = `
-        <html>
-          <head>
-            <style>
-              body {
-                font-family: Arial, sans-serif;
-                padding: 24px;
-                color: #000;
-              }
-              h1 { font-size: 22px; margin-bottom: 4px; }
-              h2 {
-                font-size: 16px;
-                margin-top: 20px;
-                border-bottom: 1px solid #ddd;
-                padding-bottom: 4px;
-              }
-              p {
-                font-size: 12px;
-                margin: 2px 0;
-                word-wrap: break-word;
-                overflow-wrap: break-word;
-              }
-              .section { margin-bottom: 16px; }
-              .row {
-                display: flex;
-                justify-content: space-between;
-                gap: 10px;
-              }
-              .left {
-                flex: 1;
-                min-width: 0;
-              }
-              .right {
-                white-space: nowrap;
-                font-size: 11px;
-                color: #555;
-              }
-            </style>
-          </head>
-          <body>
-            ${element.innerHTML}
-          </body>
-        </html>
-      `;
-
-      const res = await fetch("/api/export-pdf", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ html }),
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: "#ffffff",
       });
 
-      if (!res.ok) throw new Error("PDF failed");
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF("p", "mm", "a4");
 
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = pageWidth;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
 
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "resume.pdf";
-      a.click();
+      // Handle multi-page if content is taller than one A4 page
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      while (heightLeft > 0) {
+        position -= pageHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+
+      pdf.save("resume.pdf");
     } catch (err) {
       console.error(err);
-      alert("PDF export failed");
+      alert("PDF export failed — check console");
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -82,9 +56,10 @@ export default function ResumePreview() {
     <div className="space-y-6">
       <button
         onClick={handleDownload}
-        className="bg-black text-white px-4 py-2 rounded"
+        disabled={exporting}
+        className="bg-black text-white px-4 py-2 rounded disabled:opacity-50"
       >
-        Download PDF
+        {exporting ? "Generating PDF..." : "Download PDF"}
       </button>
 
       <div
@@ -104,7 +79,6 @@ export default function ResumePreview() {
         {/* EDUCATION */}
         <div className="mb-6">
           <h2 className="font-bold border-b pb-1 mb-2">Education</h2>
-
           {education.map((edu, index) => (
             <div key={index} className="mb-3">
               <div className="flex justify-between gap-2">
@@ -115,7 +89,6 @@ export default function ResumePreview() {
                   {edu.year || ""}
                 </div>
               </div>
-
               <p className="text-gray-600 break-words">
                 {edu.school || ""}
               </p>
@@ -126,7 +99,6 @@ export default function ResumePreview() {
         {/* EXPERIENCE */}
         <div>
           <h2 className="font-bold border-b pb-1 mb-2">Experience</h2>
-
           {experience.map((exp, index) => (
             <div key={index} className="mb-4">
               <div className="flex justify-between gap-2">
@@ -137,11 +109,9 @@ export default function ResumePreview() {
                   {exp.duration || ""}
                 </div>
               </div>
-
               <p className="text-gray-600 break-words">
                 {exp.company || ""}
               </p>
-
               <p className="mt-1 break-words">
                 {exp.description || ""}
               </p>

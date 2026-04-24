@@ -1,8 +1,6 @@
 "use client";
 
 import { useResumeStore } from "@/store/useResumeStore";
-import html2canvas from "html2canvas";
-import jsPDF from "jspdf";
 import { useState } from "react";
 
 export default function ResumePreview() {
@@ -16,6 +14,10 @@ export default function ResumePreview() {
     setExporting(true);
 
     try {
+      // ✅ Dynamic imports (Vercel-safe)
+      const html2canvas = (await import("html2canvas")).default;
+      const jsPDF = (await import("jspdf")).jsPDF;
+
       const canvas = await html2canvas(element, {
         scale: 2,
         useCORS: true,
@@ -40,7 +42,7 @@ export default function ResumePreview() {
       pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
       remainingHeight -= pageHeight;
 
-      // Additional pages
+      // Multi-page support
       while (remainingHeight > 0) {
         position -= pageHeight;
         pdf.addPage();
@@ -50,7 +52,7 @@ export default function ResumePreview() {
 
       pdf.save("resume.pdf");
     } catch (err) {
-      console.error(err);
+      console.error("PDF ERROR:", err);
       alert("PDF export failed — check console");
     } finally {
       setExporting(false);
@@ -59,6 +61,7 @@ export default function ResumePreview() {
 
   return (
     <div className="space-y-6">
+      {/* BUTTON */}
       <button
         onClick={handleDownload}
         disabled={exporting}
@@ -67,13 +70,14 @@ export default function ResumePreview() {
         {exporting ? "Generating PDF..." : "Download PDF"}
       </button>
 
+      {/* CENTERED A4 PREVIEW */}
       <div className="flex justify-center">
         <div
           id="resume"
           className="bg-white text-black p-8 shadow text-sm"
           style={{
-            width: "794px", // 👈 exact A4 width
-            minHeight: "1123px", // 👈 exact A4 height
+            width: "794px",       // A4 width
+            minHeight: "1123px",  // A4 height
           }}
         >
           {/* HEADER */}
@@ -89,6 +93,7 @@ export default function ResumePreview() {
           {/* EDUCATION */}
           <div className="mb-6">
             <h2 className="font-bold border-b pb-1 mb-2">Education</h2>
+
             {education.map((edu, index) => (
               <div key={index} className="mb-3">
                 <div className="flex justify-between gap-2">
@@ -99,6 +104,7 @@ export default function ResumePreview() {
                     {edu.year || ""}
                   </div>
                 </div>
+
                 <p className="text-gray-600 break-words">
                   {edu.school || ""}
                 </p>
@@ -109,6 +115,7 @@ export default function ResumePreview() {
           {/* EXPERIENCE */}
           <div>
             <h2 className="font-bold border-b pb-1 mb-2">Experience</h2>
+
             {experience.map((exp, index) => (
               <div key={index} className="mb-4">
                 <div className="flex justify-between gap-2">
@@ -119,9 +126,11 @@ export default function ResumePreview() {
                     {exp.duration || ""}
                   </div>
                 </div>
+
                 <p className="text-gray-600 break-words">
                   {exp.company || ""}
                 </p>
+
                 <p className="mt-1 break-words">
                   {exp.description || ""}
                 </p>

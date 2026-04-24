@@ -2,11 +2,12 @@ import puppeteer from "puppeteer-core";
 import chromium from "@sparticuz/chromium";
 import { NextRequest, NextResponse } from "next/server";
 
+export const runtime = "nodejs"; // 🔥 REQUIRED
+
 export async function POST(req: NextRequest) {
   try {
     const { html } = await req.json();
 
-    // Ensure executable path ALWAYS resolves
     const executablePath = await chromium.executablePath();
 
     const browser = await puppeteer.launch({
@@ -17,14 +18,12 @@ export async function POST(req: NextRequest) {
 
     const page = await browser.newPage();
 
-    // Set viewport (important for layout stability)
     await page.setViewport({
       width: 794,
       height: 1123,
       deviceScaleFactor: 2,
     });
 
-    // Load HTML safely
     await page.setContent(html, {
       waitUntil: "networkidle0",
       timeout: 30000,

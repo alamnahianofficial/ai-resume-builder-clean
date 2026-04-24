@@ -556,29 +556,28 @@ export default function Builder() {
 
       const PAGE_W_MM = 210;
       const PAGE_H_MM = 297;
-      const MARGIN_MM = 15;
 
-      const printW = PAGE_W_MM - MARGIN_MM * 2;
-      const printH = PAGE_H_MM - MARGIN_MM * 2;
-
-      const imgW_mm = printW;
+      // No extra PDF margin — the HTML already has 72px top / 82px side padding
+      // which renders as the visual margin inside the canvas. Adding another
+      // PDF margin would double the gap. Stretching edge-to-edge also means the
+      // last page slice fills correctly with no wasted blank space.
+      const imgW_mm = PAGE_W_MM;
       const imgH_mm = (canvas.height / canvas.width) * imgW_mm;
 
       const imgData = canvas.toDataURL("image/jpeg", 0.95);
 
-      // Multi-page slicing:
-      // On page N (0-indexed), we shift the full image upward by N*printH
-      // so the correct slice aligns to the top margin. jsPDF clips the rest.
-      const totalPages = Math.ceil(imgH_mm / printH);
+      // Multi-page slicing: shift the full image up by N * PAGE_H_MM on page N.
+      // jsPDF clips anything outside the page bounds automatically.
+      const totalPages = Math.ceil(imgH_mm / PAGE_H_MM);
       for (let pageIndex = 0; pageIndex < totalPages; pageIndex++) {
         if (pageIndex > 0) pdf.addPage();
         pdf.addImage(
           imgData,
           "JPEG",
-          MARGIN_MM,                          // X — left margin
-          MARGIN_MM - pageIndex * printH,     // Y — shift up each page
-          imgW_mm,                            // width
-          imgH_mm,                            // full image height (clipped by jsPDF)
+          0,                          // X — flush left (HTML padding is the margin)
+          -(pageIndex * PAGE_H_MM),   // Y — shift image up each page
+          imgW_mm,
+          imgH_mm,
         );
       }
 

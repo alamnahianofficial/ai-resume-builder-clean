@@ -504,7 +504,7 @@ export default function Builder() {
 
     const iframe = document.createElement("iframe");
     iframe.style.cssText =
-      "position:fixed;top:0;left:-9999px;width:794px;height:1080px;border:none;opacity:0;pointer-events:none;z-index:-1";
+      "position:fixed;top:0;left:-9999px;width:794px;height:1080px;border:none;opacity:0;";
     document.body.appendChild(iframe);
 
     const iDoc = iframe.contentDocument!;
@@ -512,96 +512,72 @@ export default function Builder() {
     iDoc.write(buildPDFHtml(resume, photo));
     iDoc.close();
 
-    await Promise.all(
-      Array.from(iDoc.images).map((img) =>
-        img.complete
-          ? Promise.resolve()
-          : new Promise<void>((r) => {
-              img.onload = () => r();
-              img.onerror = () => r();
-            })
-      )
-    );
-
-    await new Promise((r) => setTimeout(r, 400));
+    await new Promise((r) => setTimeout(r, 500));
 
     const root = iDoc.getElementById("cv-root") as HTMLElement;
     const totalH = root.scrollHeight;
 
     iframe.style.height = `${totalH}px`;
-    await new Promise((r) => setTimeout(r, 120));
+    await new Promise((r) => setTimeout(r, 200));
 
     const canvas = await html2canvas(root, {
       scale: 2,
       useCORS: true,
-      allowTaint: true,
       backgroundColor: "#ffffff",
-      logging: false,
       width: 794,
       height: totalH,
-      windowWidth: 794,
-      windowHeight: totalH,
     });
 
     document.body.removeChild(iframe);
 
-    const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    const pdf = new jsPDF("p", "mm", "a4");
 
     const PW = 210;
     const PH = 297;
     const margin = 10;
 
     const pxPerMm = canvas.width / PW;
-    const usableHeightMm = PH - margin * 2;
-    const pageHpx = Math.round(usableHeightMm * pxPerMm);
+    const pageHpx = Math.floor((PH - margin * 2) * pxPerMm);
 
-    const pages = Math.ceil(canvas.height / pageHpx);
+    const totalPages = Math.ceil(canvas.height / pageHpx);
 
-    for (let p = 0; p < pages; p++) {
-      if (p > 0) pdf.addPage();
+    for (let i = 0; i < totalPages; i++) {
+      if (i > 0) pdf.addPage();
 
-      const slice = document.createElement("canvas");
-      slice.width = canvas.width;
+      const pageCanvas = document.createElement("canvas");
+      pageCanvas.width = canvas.width;
+      pageCanvas.height = pageHpx;
 
-      const sliceHeight =
-        p === pages - 1
-          ? canvas.height - pageHpx * p
-          : pageHpx;
-
-      slice.height = sliceHeight;
-
-      const ctx = slice.getContext("2d")!;
+      const ctx = pageCanvas.getContext("2d")!;
       ctx.fillStyle = "#fff";
-      ctx.fillRect(0, 0, slice.width, slice.height);
+      ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
 
       ctx.drawImage(
         canvas,
         0,
-        p * pageHpx,
+        i * pageHpx,
         canvas.width,
-        sliceHeight,
+        pageHpx,
         0,
         0,
         canvas.width,
-        sliceHeight
+        pageHpx
       );
 
-      const heightRatio = sliceHeight / canvas.width;
-
       pdf.addImage(
-        slice.toDataURL("image/jpeg", 0.97),
+        pageCanvas.toDataURL("image/jpeg", 0.95),
         "JPEG",
         margin,
         margin,
         PW - margin * 2,
-        (PW - margin * 2) * heightRatio
+        PH - margin * 2
       );
     }
 
     pdf.save(`${resume.full_name || "Resume"}_CV.pdf`);
   } catch (err) {
-    console.error("PDF error:", err);
-    alert("PDF export failed — check console.");
+    console.error(err);
+    alert("PDF export failed");
   }
 
   setExportingPDF(false);

@@ -556,7 +556,17 @@ export default function Builder() {
         const ctx = slice.getContext("2d")!;
         ctx.fillStyle = "#fff";
         ctx.fillRect(0, 0, slice.width, slice.height);
-        ctx.drawImage(canvas, 0, -(p * pageHpx));
+        ctx.drawImage(
+  canvas,
+  0,
+  p * pageHpx,
+  canvas.width,
+  pageHpx,
+  0,
+  0,
+  canvas.width,
+  pageHpx
+);
         pdf.addImage(
   slice.toDataURL("image/jpeg", 0.97),
   "JPEG",
